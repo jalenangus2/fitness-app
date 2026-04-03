@@ -10,6 +10,9 @@ class Settings(BaseSettings):
     SECRET_KEY: str = "changethissecretkeyinproduction"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 10080
     DATABASE_URL: str = "sqlite:///./lifestyle.db"
+    PLAID_CLIENT_ID: str = ""
+    PLAID_SECRET: str = ""
+    PLAID_ENV: str = "sandbox"
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

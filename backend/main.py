@@ -5,7 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .database import engine, Base
-from .routers import auth, workout, meal, shopping, schedule, fashion, dashboard
+from .routers import auth, workout, meal, shopping, schedule, fashion, dashboard, finance
 
 
 @asynccontextmanager
@@ -41,6 +41,7 @@ app.include_router(shopping.router, prefix="/api/v1/shopping",  tags=["shopping"
 app.include_router(schedule.router, prefix="/api/v1/schedule",  tags=["schedule"])
 app.include_router(fashion.router,  prefix="/api/v1/fashion",   tags=["fashion"])
 app.include_router(dashboard.router,prefix="/api/v1/dashboard", tags=["dashboard"])
+app.include_router(finance.router,  prefix="/api/v1/finance",   tags=["finance"])
 
 
 @app.get("/api/v1/health")

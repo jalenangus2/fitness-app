@@ -10,6 +10,7 @@ import MealPage from './pages/MealPage'
 import ShoppingPage from './pages/ShoppingPage'
 import SchedulePage from './pages/SchedulePage'
 import FashionPage from './pages/FashionPage'
+import FinancePage from './pages/FinancePage'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -30,6 +31,7 @@ const router = createBrowserRouter([
       { path: '/shopping', element: <ShoppingPage /> },
       { path: '/schedule', element: <SchedulePage /> },
       { path: '/fashion', element: <FashionPage /> },
+      { path: '/finance', element: <FinancePage /> },
     ],
   },
 ])
