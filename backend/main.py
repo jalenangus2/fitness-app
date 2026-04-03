@@ -7,6 +7,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from .database import engine, Base
 from .routers import auth, workout, meal, shopping, schedule, fashion, dashboard, finance
 
+import os
+print(f"DEBUG: Plaid ID is {os.getenv('PLAID_CLIENT_ID')}")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
