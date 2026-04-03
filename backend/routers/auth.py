@@ -2,6 +2,12 @@
 from datetime import datetime, timedelta
 from typing import Optional
 
+# Patch for passlib + bcrypt >= 4.1 compatibility
+import bcrypt
+if not hasattr(bcrypt, '__about__'):
+    import types
+    bcrypt.__about__ = types.SimpleNamespace(__version__=bcrypt.__version__)
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jose import JWTError, jwt
