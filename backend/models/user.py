@@ -21,3 +21,5 @@ class User(Base):
     tasks = relationship("Task", back_populates="user", cascade="all, delete-orphan")
     fashion_releases = relationship("FashionRelease", back_populates="user", cascade="all, delete-orphan")
     fashion_alerts = relationship("FashionAlert", back_populates="user", cascade="all, delete-orphan")
+    plaid_items = relationship("PlaidItem", back_populates="user", cascade="all, delete-orphan")
+    budgets = relationship("Budget", back_populates="user", cascade="all, delete-orphan")

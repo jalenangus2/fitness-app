@@ -6,6 +6,7 @@ import {
   ShoppingCart,
   Calendar,
   Shirt,
+  DollarSign,
   LogOut,
   Zap,
 } from 'lucide-react'
@@ -19,6 +20,7 @@ const navItems = [
   { to: '/shopping', icon: ShoppingCart, label: 'Shopping' },
   { to: '/schedule', icon: Calendar, label: 'Schedule' },
   { to: '/fashion', icon: Shirt, label: 'Fashion' },
+  { to: '/finance', icon: DollarSign, label: 'Finances' },
 ]
 
 export default function Sidebar() {

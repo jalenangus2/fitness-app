@@ -158,6 +158,58 @@ export interface FashionRelease {
   alerts: FashionAlert[]
 }
 
+// ─── Finance ──────────────────────────────────────────────────────────────────
+export interface PlaidAccount {
+  id: number
+  account_id: string
+  name: string
+  official_name: string | null
+  type: string
+  subtype: string | null
+  current_balance: number | null
+  available_balance: number | null
+  currency: string
+  mask: string | null
+  institution_name: string | null
+}
+
+export interface Transaction {
+  id: number
+  transaction_id: string
+  name: string
+  amount: number
+  date: string
+  category: string | null
+  category_detailed: string | null
+  custom_category: string | null
+  merchant_name: string | null
+  pending: boolean
+  logo_url: string | null
+  account_name: string
+  account_id: string
+}
+
+export interface Budget {
+  id: number
+  category: string
+  name: string
+  amount_cents: number
+  color: string
+}
+
+export interface BudgetWithSpend extends Budget {
+  spent_cents: number
+  percent_used: number
+}
+
+export interface FinanceSummary {
+  total_balance: number
+  monthly_spend: number
+  top_categories: { category: string; amount: number }[]
+  budgets_with_spend: BudgetWithSpend[]
+  accounts: PlaidAccount[]
+}
+
 // ─── Dashboard ────────────────────────────────────────────────────────────────
 export interface DashboardSummary {
   active_workout_plan: {
