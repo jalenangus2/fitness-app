@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Zap } from 'lucide-react'
-import { register, login, getMe } from '../api/auth'
+import { register, login } from '../api/auth'
 import { useAuthStore } from '../store/authStore'
 import Input from '../components/ui/Input'
 import Button from '../components/ui/Button'
@@ -19,9 +19,8 @@ export default function RegisterPage() {
     setLoading(true)
     try {
       await register(form)
-      const { access_token } = await login({ username: form.username, password: form.password })
-      const me = await getMe()
-      setAuth(access_token, me)
+      const { access_token, user } = await login({ username: form.username, password: form.password })
+      setAuth(access_token, user)
       navigate('/dashboard')
     } catch (err: any) {
       setError(err?.response?.data?.detail || 'Registration failed. Try a different username or email.')

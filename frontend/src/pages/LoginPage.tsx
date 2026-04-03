@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Zap } from 'lucide-react'
-import { login, getMe } from '../api/auth'
+import { login } from '../api/auth'
 import { useAuthStore } from '../store/authStore'
 import Input from '../components/ui/Input'
 import Button from '../components/ui/Button'
@@ -18,9 +18,8 @@ export default function LoginPage() {
     setError('')
     setLoading(true)
     try {
-      const { access_token } = await login(form)
-      const me = await getMe()
-      setAuth(access_token, me)
+      const { access_token, user } = await login(form)
+      setAuth(access_token, user)
       navigate('/dashboard')
     } catch {
       setError('Invalid email or password.')

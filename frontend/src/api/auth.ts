@@ -18,7 +18,7 @@ export const login = async (data: LoginRequest) => {
   const res = await client.post('/auth/token', form, {
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
   })
-  return res.data as { access_token: string; token_type: string }
+  return res.data as { access_token: string; token_type: string; user: { id: number; email: string; username: string } }
 }
 
 export const register = async (data: RegisterRequest) => {
