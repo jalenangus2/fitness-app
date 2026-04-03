@@ -19,6 +19,7 @@ app = FastAPI(
     description="Personal lifestyle app: fitness, nutrition, shopping, schedule, and fashion.",
     version="1.0.0",
     lifespan=lifespan,
+    redirect_slashes=False,
 )
 
 app.add_middleware(
