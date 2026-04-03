@@ -73,28 +73,27 @@ def get_current_user(
 
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 def register(data: UserCreate, db: Session = Depends(get_db)):
-    # Check for existing email
-    if db.query(User).filter(User.email == data.email).first():
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Email already registered",
+    import traceback, logging
+    logger = logging.getLogger(__name__)
+    try:
+        if db.query(User).filter(User.email == data.email).first():
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email already registered")
+        if db.query(User).filter(User.username == data.username).first():
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Username already taken")
+        user = User(
+            email=data.email,
+            username=data.username,
+            hashed_password=hash_password(data.password),
         )
-    # Check for existing username
-    if db.query(User).filter(User.username == data.username).first():
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Username already taken",
-        )
-
-    user = User(
-        email=data.email,
-        username=data.username,
-        hashed_password=hash_password(data.password),
-    )
-    db.add(user)
-    db.commit()
-    db.refresh(user)
-    return user
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+        return user
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Registration error: {e}\n{traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"Registration error: {str(e)}")
 
 
 @router.post("/token", response_model=Token)
