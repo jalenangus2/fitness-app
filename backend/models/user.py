@@ -23,6 +23,7 @@ class User(Base):
     fashion_alerts = relationship("FashionAlert", back_populates="user", cascade="all, delete-orphan")
     plaid_items = relationship("PlaidItem", back_populates="user", cascade="all, delete-orphan")
     budgets = relationship("Budget", back_populates="user", cascade="all, delete-orphan")
+    financial_goals = relationship("FinancialGoal", back_populates="user", cascade="all, delete-orphan")
     workout_sessions = relationship("WorkoutSession", back_populates="user", cascade="all, delete-orphan")
     food_log_entries = relationship("FoodLogEntry", back_populates="user", cascade="all, delete-orphan")
     water_logs = relationship("WaterLog", back_populates="user", cascade="all, delete-orphan")

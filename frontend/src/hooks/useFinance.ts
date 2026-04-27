@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import * as api from '../api/finance'
-import type { Budget } from '../types'
+import type { Budget, FinancialGoalCreate } from '../types'
 
 export function useLinkToken() {
   return useQuery({
@@ -105,5 +105,33 @@ export function useFinanceSummary() {
     queryKey: ['finance-summary'],
     queryFn: api.getFinanceSummary,
     refetchInterval: 60_000,
+  })
+}
+
+export function useGoals() {
+  return useQuery({ queryKey: ['finance-goals'], queryFn: api.getGoals })
+}
+
+export function useCreateGoal() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (data: FinancialGoalCreate) => api.createGoal(data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['finance-goals'] }),
+  })
+}
+
+export function useUpdateGoal() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, data }: { id: number; data: Partial<FinancialGoalCreate> }) => api.updateGoal(id, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['finance-goals'] }),
+  })
+}
+
+export function useDeleteGoal() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: number) => api.deleteGoal(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['finance-goals'] }),
   })
 }
