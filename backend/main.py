@@ -5,7 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .database import engine, Base
-from .routers import auth, workout, meal, shopping, schedule, fashion, dashboard, finance
+from .routers import auth, workout, meal, shopping, schedule, fashion, dashboard, finance, tracking
 
 import os
 print(f"DEBUG: Plaid ID is {os.getenv('PLAID_CLIENT_ID')}")
@@ -43,7 +43,8 @@ app.include_router(shopping.router, prefix="/api/v1/shopping",  tags=["shopping"
 app.include_router(schedule.router, prefix="/api/v1/schedule",  tags=["schedule"])
 app.include_router(fashion.router,  prefix="/api/v1/fashion",   tags=["fashion"])
 app.include_router(dashboard.router,prefix="/api/v1/dashboard", tags=["dashboard"])
-app.include_router(finance.router,  prefix="/api/v1/finance",   tags=["finance"])
+app.include_router(finance.router,   prefix="/api/v1/finance",   tags=["finance"])
+app.include_router(tracking.router,  prefix="/api/v1/tracking",  tags=["tracking"])
 
 
 @app.get("/api/v1/health")
