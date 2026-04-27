@@ -1,6 +1,6 @@
-import { useState } from 'react'
-import { Plus, Zap, CheckCircle, Trash2, ChevronDown, ChevronUp, UtensilsCrossed, ShoppingCart } from 'lucide-react'
-import { useMealPlans, useGenerateMealPlan, useActivateMealPlan, useDeleteMealPlan } from '../hooks/useMeal'
+import { useState, useMemo } from 'react'
+import { Plus, Zap, CheckCircle, Trash2, ChevronDown, ChevronUp, UtensilsCrossed, ShoppingCart, Search } from 'lucide-react'
+import { useMealPlans, useGenerateMealPlan, useCreateMealPlan, useActivateMealPlan, useDeleteMealPlan, useDailyNutrition, useLogNutrition } from '../hooks/useMeal'
 import { useCreateShoppingList } from '../hooks/useShopping'
 import { useToast } from '../components/ui/Toast'
 import Card from '../components/ui/Card'
@@ -12,116 +12,155 @@ import Input from '../components/ui/Input'
 import Spinner from '../components/ui/Spinner'
 import type { MealPlan } from '../types'
 
-const GOAL_OPTIONS = [
-  { value: 'weight_loss', label: 'Weight Loss' },
-  { value: 'muscle_gain', label: 'Muscle Gain' },
-  { value: 'maintenance', label: 'Maintenance' },
-  { value: 'keto', label: 'Keto' },
-  { value: 'vegan', label: 'Vegan' },
-]
-
+const GOAL_OPTIONS = [{ value: 'weight_loss', label: 'Weight Loss' }, { value: 'muscle_gain', label: 'Muscle Gain' }, { value: 'maintenance', label: 'Maintenance' }, { value: 'keto', label: 'Keto' }, { value: 'vegan', label: 'Vegan' }]
 const RESTRICTION_OPTIONS = ['Vegetarian', 'Vegan', 'Gluten-Free', 'Dairy-Free', 'Nut-Free', 'Halal', 'Kosher']
-
-const GOAL_COLORS: Record<string, 'green' | 'blue' | 'yellow' | 'red' | 'indigo' | 'slate'> = {
-  weight_loss: 'blue',
-  muscle_gain: 'green',
-  maintenance: 'slate',
-  keto: 'yellow',
-  vegan: 'green',
-}
+const GOAL_COLORS: Record<string, 'green' | 'blue' | 'yellow' | 'red' | 'indigo' | 'slate'> = { weight_loss: 'blue', muscle_gain: 'green', maintenance: 'slate', keto: 'yellow', vegan: 'green' }
 
 export default function MealPage() {
   const { data: plans = [], isLoading } = useMealPlans()
+  const { data: logs = [] } = useDailyNutrition()
   const generate = useGenerateMealPlan()
+  const createManual = useCreateMealPlan()
   const activate = useActivateMealPlan()
   const remove = useDeleteMealPlan()
   const createList = useCreateShoppingList()
+  const logNutrients = useLogNutrition()
   const { toast } = useToast()
-  const [showModal, setShowModal] = useState(false)
+
+  // UI State
+  const [showPlanModal, setShowPlanModal] = useState(false)
+  const [showLogModal, setShowLogModal] = useState(false)
+  const [createMode, setCreateMode] = useState<'ai' | 'manual'>('ai')
   const [expandedId, setExpandedId] = useState<number | null>(null)
   const [expandedDay, setExpandedDay] = useState<number>(1)
-  const [form, setForm] = useState({
-    goal: 'muscle_gain',
-    target_calories: 2500,
-    target_protein_g: 180,
-    target_carbs_g: 250,
-    target_fat_g: 80,
-    duration_days: 7,
-    dietary_restrictions: [] as string[],
-  })
+
+  // Forms
+  const [form, setForm] = useState({ name: '', goal: 'muscle_gain', target_calories: 2500, target_protein_g: 180, target_carbs_g: 250, target_fat_g: 80, duration_days: 7, dietary_restrictions: [] as string[] })
+  const [logForm, setLogForm] = useState({ name: '', calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 })
+
+  const activePlan = plans.find(p => p.is_active)
+  
+  // Macro Calculations
+  const dailyTargets = useMemo(() => activePlan ? {
+    cals: activePlan.target_calories || 2000,
+    prot: activePlan.target_protein_g || 150,
+    carb: activePlan.target_carbs_g || 200,
+    fat: activePlan.target_fat_g || 65
+  } : { cals: 2000, prot: 150, carb: 200, fat: 65 }, [activePlan])
+
+  const dailyTotals = useMemo(() => logs.reduce((acc, log) => ({
+    cals: acc.cals + log.calories,
+    prot: acc.prot + log.protein_g,
+    carb: acc.carb + log.carbs_g,
+    fat: acc.fat + log.fat_g
+  }), { cals: 0, prot: 0, carb: 0, fat: 0 }), [logs])
 
   const toggleRestriction = (r: string) => {
-    setForm((f) => ({
-      ...f,
-      dietary_restrictions: f.dietary_restrictions.includes(r)
-        ? f.dietary_restrictions.filter((x) => x !== r)
-        : [...f.dietary_restrictions, r],
-    }))
+    setForm(f => ({ ...f, dietary_restrictions: f.dietary_restrictions.includes(r) ? f.dietary_restrictions.filter(x => x !== r) : [...f.dietary_restrictions, r] }))
   }
 
-  const handleGenerate = async () => {
-    try {
-      await generate.mutateAsync({ ...form, dietary_restrictions: form.dietary_restrictions.map((r) => r.toLowerCase()) })
+  const handleCreatePlan = async () => {
+    if (createMode === 'ai') {
+      await generate.mutateAsync({ ...form, dietary_restrictions: form.dietary_restrictions.map(r => r.toLowerCase()) })
       toast('Meal plan generated!', 'success')
-      setShowModal(false)
-    } catch {
-      toast('Failed to generate meal plan. Check your API key.', 'error')
+    } else {
+      await createManual.mutateAsync({ ...form, is_ai_generated: false, meals: [] })
+      toast('Manual plan created. Edit it to add meals.', 'success')
     }
+    setShowPlanModal(false)
   }
 
-  const handleCreateShoppingList = async (plan: MealPlan) => {
-    try {
-      await createList.mutateAsync({ name: `${plan.name} Shopping List`, meal_plan_id: plan.id })
-      toast('Shopping list created! Check the Shopping page.', 'success')
-    } catch {
-      toast('Failed to create shopping list.', 'error')
-    }
+  const handleLogNutrition = async () => {
+    if (!logForm.name || logForm.calories <= 0) return toast('Please enter a valid food name and calories.', 'error')
+    await logNutrients.mutateAsync(logForm)
+    toast('Food logged!', 'success')
+    setShowLogModal(false)
+    setLogForm({ name: '', calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 })
   }
 
   if (isLoading) return <div className="flex justify-center h-64"><Spinner size="lg" /></div>
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-100">Meal Planner</h1>
-          <p className="text-slate-400 mt-1">AI-generated meal plans matched to your goals.</p>
+    <div className="space-y-6 pb-20">
+      
+      {/* MACRO DASHBOARD */}
+      <Card className="bg-slate-800 border-slate-700">
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-lg font-bold text-slate-100">Today's Nutrition</h2>
+          <Button size="sm" onClick={() => setShowLogModal(true)}><Plus size={14} className="mr-1"/> Quick Add</Button>
         </div>
-        <Button onClick={() => setShowModal(true)}>
-          <Plus size={16} /> Generate Plan
-        </Button>
+        
+        {/* Calories Progress Bar */}
+        <div className="mb-6">
+           <div className="flex justify-between text-sm mb-1 text-slate-300">
+             <span>Calories</span>
+             <span>{dailyTotals.cals} / {dailyTargets.cals} kcal</span>
+           </div>
+           <div className="h-3 w-full bg-slate-700 rounded-full overflow-hidden">
+             <div className="h-full bg-emerald-500 transition-all duration-500" style={{ width: `${Math.min(100, (dailyTotals.cals / dailyTargets.cals) * 100)}%` }} />
+           </div>
+        </div>
+
+        {/* Macros Progress Bars */}
+        <div className="grid grid-cols-3 gap-4">
+          <MacroBar label="Protein" current={dailyTotals.prot} target={dailyTargets.prot} color="bg-blue-500" />
+          <MacroBar label="Carbs" current={dailyTotals.carb} target={dailyTargets.carb} color="bg-amber-500" />
+          <MacroBar label="Fats" current={dailyTotals.fat} target={dailyTargets.fat} color="bg-rose-500" />
+        </div>
+      </Card>
+
+      {/* PLANNER SECTION */}
+      <div className="flex items-center justify-between mt-8">
+        <div>
+          <h1 className="text-xl font-bold text-slate-100">Meal Plans</h1>
+        </div>
+        <Button onClick={() => setShowPlanModal(true)} variant="secondary" size="sm"><Plus size={16} /> New Plan</Button>
       </div>
 
-      {plans.length === 0 ? (
-        <Card className="text-center py-16">
-          <UtensilsCrossed size={40} className="text-slate-600 mx-auto mb-4" />
-          <h3 className="text-slate-300 font-medium mb-2">No meal plans yet</h3>
-          <p className="text-slate-500 text-sm mb-6">Generate a personalized meal plan with AI.</p>
-          <Button onClick={() => setShowModal(true)}><Plus size={16} /> Generate Your First Plan</Button>
-        </Card>
-      ) : (
-        <div className="space-y-4">
-          {plans.map((plan) => (
-            <MealPlanCard
-              key={plan.id}
-              plan={plan}
-              expanded={expandedId === plan.id}
-              expandedDay={expandedDay}
-              onToggle={() => setExpandedId(expandedId === plan.id ? null : plan.id)}
-              onDayChange={setExpandedDay}
-              onActivate={() => activate.mutateAsync(plan.id).then(() => toast('Meal plan activated!', 'success'))}
-              onDelete={() => remove.mutateAsync(plan.id).then(() => toast('Meal plan deleted.', 'info'))}
-              onCreateShoppingList={() => handleCreateShoppingList(plan)}
-            />
-          ))}
-        </div>
-      )}
+      <div className="space-y-4">
+        {plans.map((plan) => (
+          <MealPlanCard
+            key={plan.id} plan={plan} expanded={expandedId === plan.id} expandedDay={expandedDay}
+            onToggle={() => setExpandedId(expandedId === plan.id ? null : plan.id)}
+            onDayChange={setExpandedDay}
+            onActivate={() => activate.mutateAsync(plan.id!).then(() => toast('Meal plan activated!', 'success'))}
+            onDelete={() => remove.mutateAsync(plan.id!).then(() => toast('Meal plan deleted.', 'info'))}
+            onCreateShoppingList={() => createList.mutateAsync({ name: `${plan.name} Shopping List`, meal_plan_id: plan.id }).then(() => toast('Shopping List created!', 'success'))}
+          />
+        ))}
+      </div>
 
-      <Modal isOpen={showModal} onClose={() => setShowModal(false)} title="Generate AI Meal Plan" size="lg">
-        <div className="space-y-5">
+      {/* QUICK ADD LOG MODAL */}
+      <Modal isOpen={showLogModal} onClose={() => setShowLogModal(false)} title="Log Food">
+        <div className="space-y-4">
+          <div className="relative">
+             <Input label="Food Name" value={logForm.name} onChange={e => setLogForm({...logForm, name: e.target.value})} placeholder="e.g. Chicken Breast" autoFocus />
+             <Search className="absolute right-3 top-9 text-slate-500" size={16} />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+             <Input label="Calories" type="number" value={logForm.calories} onChange={e => setLogForm({...logForm, calories: Number(e.target.value)})} />
+             <Input label="Protein (g)" type="number" value={logForm.protein_g} onChange={e => setLogForm({...logForm, protein_g: Number(e.target.value)})} />
+             <Input label="Carbs (g)" type="number" value={logForm.carbs_g} onChange={e => setLogForm({...logForm, carbs_g: Number(e.target.value)})} />
+             <Input label="Fat (g)" type="number" value={logForm.fat_g} onChange={e => setLogForm({...logForm, fat_g: Number(e.target.value)})} />
+          </div>
+          <Button onClick={handleLogNutrition} className="w-full">Log Nutrition</Button>
+        </div>
+      </Modal>
+
+      {/* CREATE PLAN MODAL */}
+      <Modal isOpen={showPlanModal} onClose={() => setShowPlanModal(false)} title="Create Meal Plan" size="lg">
+        <div className="flex bg-slate-800 p-1 rounded-lg mb-4">
+          <button onClick={() => setCreateMode('ai')} className={`flex-1 py-2 text-sm rounded-md transition ${createMode === 'ai' ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}>AI Generate</button>
+          <button onClick={() => setCreateMode('manual')} className={`flex-1 py-2 text-sm rounded-md transition ${createMode === 'manual' ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}>Build Manual</button>
+        </div>
+        
+        <div className="space-y-4 max-h-[60vh] overflow-y-auto px-1">
+          {createMode === 'manual' && (
+             <Input label="Plan Name" value={form.name} onChange={e => setForm({...form, name: e.target.value})} placeholder="e.g. Bulk Week 1" />
+          )}
           <Select label="Goal" options={GOAL_OPTIONS} value={form.goal} onChange={(e) => setForm({ ...form, goal: e.target.value })} />
           <div className="grid grid-cols-2 gap-4">
-            <Input label="Daily Calories" type="number" min={1000} max={5000} value={form.target_calories} onChange={(e) => setForm({ ...form, target_calories: Number(e.target.value) })} />
+            <Input label="Daily Calories" type="number" min={1000} value={form.target_calories} onChange={(e) => setForm({ ...form, target_calories: Number(e.target.value) })} />
             <Input label="Duration (days)" type="number" min={1} max={14} value={form.duration_days} onChange={(e) => setForm({ ...form, duration_days: Number(e.target.value) })} />
           </div>
           <div className="grid grid-cols-3 gap-4">
@@ -129,77 +168,91 @@ export default function MealPage() {
             <Input label="Carbs (g)" type="number" min={0} value={form.target_carbs_g} onChange={(e) => setForm({ ...form, target_carbs_g: Number(e.target.value) })} />
             <Input label="Fat (g)" type="number" min={0} value={form.target_fat_g} onChange={(e) => setForm({ ...form, target_fat_g: Number(e.target.value) })} />
           </div>
-          <div>
-            <p className="text-sm font-medium text-slate-300 mb-2">Dietary Restrictions</p>
-            <div className="flex flex-wrap gap-2">
-              {RESTRICTION_OPTIONS.map((r) => (
-                <button key={r} onClick={() => toggleRestriction(r)} className={`px-3 py-1.5 rounded-lg text-sm border transition-all ${form.dietary_restrictions.includes(r) ? 'bg-indigo-600 border-indigo-500 text-white' : 'bg-slate-700 border-slate-600 text-slate-300 hover:border-slate-500'}`}>{r}</button>
-              ))}
+          {createMode === 'ai' && (
+            <div>
+              <p className="text-sm font-medium text-slate-300 mb-2">Dietary Restrictions</p>
+              <div className="flex flex-wrap gap-2">
+                {RESTRICTION_OPTIONS.map(r => (
+                  <button key={r} onClick={() => toggleRestriction(r)} className={`px-3 py-1.5 rounded-lg text-xs border ${form.dietary_restrictions.includes(r) ? 'bg-indigo-600 border-indigo-500 text-white' : 'bg-slate-700 border-slate-600 text-slate-300'}`}>{r}</button>
+                ))}
+              </div>
             </div>
-          </div>
-          <div className="flex gap-3 pt-2">
-            <Button variant="secondary" onClick={() => setShowModal(false)} className="flex-1">Cancel</Button>
-            <Button onClick={handleGenerate} loading={generate.isPending} className="flex-1">
-              <Zap size={16} /> Generate with AI
-            </Button>
-          </div>
+          )}
+        </div>
+        <div className="flex gap-3 pt-4 mt-4 border-t border-slate-700">
+          <Button variant="secondary" onClick={() => setShowPlanModal(false)} className="flex-1">Cancel</Button>
+          <Button onClick={handleCreatePlan} className="flex-1">{createMode === 'ai' ? <><Zap size={16} /> Generate</> : 'Save Plan'}</Button>
         </div>
       </Modal>
     </div>
   )
 }
 
-function MealPlanCard({ plan, expanded, expandedDay, onToggle, onDayChange, onActivate, onDelete, onCreateShoppingList }: {
-  plan: MealPlan; expanded: boolean; expandedDay: number
-  onToggle: () => void; onDayChange: (d: number) => void
-  onActivate: () => void; onDelete: () => void; onCreateShoppingList: () => void
-}) {
-  const days = Array.from(new Set(plan.meals.map((m) => m.day_number))).sort((a, b) => a - b)
+// --- SUB-COMPONENTS ---
+function MacroBar({ label, current, target, color }: { label: string, current: number, target: number, color: string }) {
+  const pct = Math.min(100, target > 0 ? (current / target) * 100 : 0)
+  return (
+    <div className="text-center bg-slate-900 rounded-lg p-2 border border-slate-700/50">
+       <p className="text-xs text-slate-400 mb-1 font-medium tracking-wide uppercase">{label}</p>
+       <div className="h-1.5 w-full bg-slate-700 rounded-full mb-1 overflow-hidden">
+          <div className={`h-full ${color} transition-all duration-500`} style={{ width: `${pct}%` }} />
+       </div>
+       <p className="text-sm text-slate-200 font-semibold">{Math.round(current)}<span className="text-xs font-normal text-slate-500">/{target}g</span></p>
+    </div>
+  )
+}
+
+function MealPlanCard({ plan, expanded, expandedDay, onToggle, onDayChange, onActivate, onDelete, onCreateShoppingList }: any) {
+  const days = Array.from(new Set((plan.meals || []).map((m: any) => m.day_number))).sort((a: any, b: any) => a - b)
 
   return (
-    <Card className={plan.is_active ? 'border-green-500/50' : ''}>
+    <Card className={plan.is_active ? 'border-green-500/50 shadow-md shadow-green-500/10' : ''}>
       <div className="flex items-start justify-between">
-        <div>
-          <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex-1" onClick={onToggle}>
+          <div className="flex items-center gap-2">
             <h3 className="font-semibold text-slate-100">{plan.name}</h3>
+            {plan.is_ai_generated && <Zap size={12} className="text-yellow-400" />}
+          </div>
+          <div className="flex gap-1.5 mt-2 flex-wrap">
             {plan.is_active && <Badge variant="green">Active</Badge>}
             <Badge variant={GOAL_COLORS[plan.goal] ?? 'slate'}>{plan.goal.replace('_', ' ')}</Badge>
-            <Badge variant="slate">{plan.duration_days} days</Badge>
           </div>
-          {(plan.target_calories || plan.target_protein_g) && (
-            <p className="text-xs text-slate-400 mt-1">
-              {plan.target_calories} kcal · {plan.target_protein_g}g protein · {plan.target_carbs_g}g carbs · {plan.target_fat_g}g fat
-            </p>
-          )}
         </div>
-        <div className="flex items-center gap-2 ml-4">
+        <div className="flex items-center gap-1">
           <Button variant="ghost" size="sm" onClick={onCreateShoppingList}><ShoppingCart size={14} /></Button>
-          {!plan.is_active && <Button variant="ghost" size="sm" onClick={onActivate}><CheckCircle size={15} /> Activate</Button>}
-          <Button variant="ghost" size="sm" onClick={onDelete} className="text-red-400 hover:text-red-300 hover:bg-red-500/10"><Trash2 size={15} /></Button>
-          <button onClick={onToggle} className="text-slate-400 hover:text-slate-100 p-1">{expanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}</button>
+          {!plan.is_active && <Button variant="ghost" size="sm" onClick={onActivate}><CheckCircle size={15} /> Set Active</Button>}
+          <button onClick={onToggle} className="p-2 text-slate-400"><ChevronDown size={18} className={expanded ? "rotate-180 transition-transform" : "transition-transform"} /></button>
         </div>
       </div>
 
       {expanded && (
         <div className="mt-4 border-t border-slate-700 pt-4">
-          <div className="flex gap-1 mb-4 flex-wrap">
-            {days.map((d) => (
-              <button key={d} onClick={() => onDayChange(d)} className={`px-3 py-1 rounded-lg text-sm transition-all ${expandedDay === d ? 'bg-indigo-600 text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}`}>Day {d}</button>
-            ))}
-          </div>
-          <div className="space-y-3">
-            {plan.meals.filter((m) => m.day_number === expandedDay).map((meal) => (
-              <div key={meal.id} className="bg-slate-700/40 rounded-lg p-3">
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs font-medium text-indigo-400 uppercase tracking-wide">{meal.meal_type}</span>
-                  <span className="text-xs text-slate-400">{meal.calories} kcal</span>
-                </div>
-                <p className="text-sm font-medium text-slate-200">{meal.name}</p>
-                <p className="text-xs text-slate-400 mt-0.5">P: {meal.protein_g}g · C: {meal.carbs_g}g · F: {meal.fat_g}g</p>
-                {meal.recipe_notes && <p className="text-xs text-slate-500 mt-1 italic">{meal.recipe_notes}</p>}
+           {days.length > 0 ? (
+             <>
+              <div className="flex gap-1 mb-4 overflow-x-auto pb-2 hide-scrollbar">
+                {days.map((d: any) => (
+                  <button key={d} onClick={() => onDayChange(d)} className={`px-3 py-1 rounded-full text-xs whitespace-nowrap transition-all border ${expandedDay === d ? 'bg-indigo-600 border-indigo-500 text-white' : 'bg-slate-800 border-slate-700 text-slate-300'}`}>Day {d}</button>
+                ))}
               </div>
-            ))}
-          </div>
+              <div className="space-y-3">
+                {plan.meals.filter((m: any) => m.day_number === expandedDay).map((meal: any) => (
+                  <div key={meal.id} className="bg-slate-900 border border-slate-700/50 rounded-lg p-3">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs font-bold text-indigo-400 uppercase tracking-wider">{meal.meal_type}</span>
+                      <span className="text-xs bg-slate-800 px-2 py-0.5 rounded text-slate-300">{meal.calories} kcal</span>
+                    </div>
+                    <p className="text-sm font-medium text-slate-200 mt-1">{meal.name}</p>
+                    <p className="text-xs text-slate-500 mt-1">P: {meal.protein_g}g · C: {meal.carbs_g}g · F: {meal.fat_g}g</p>
+                  </div>
+                ))}
+              </div>
+             </>
+           ) : (
+             <p className="text-sm text-slate-500 text-center py-4">No meals added to this plan yet.</p>
+           )}
+           <div className="flex justify-end mt-4">
+             <Button variant="ghost" size="sm" onClick={onDelete} className="text-red-400 bg-red-500/10"><Trash2 size={14} className="mr-1"/> Delete Plan</Button>
+           </div>
         </div>
       )}
     </Card>

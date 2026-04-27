@@ -1,23 +1,19 @@
 from pydantic import BaseModel, ConfigDict
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime
 
-
+# --- Items & Meals ---
 class MealItemBase(BaseModel):
     ingredient_name: str
     quantity: Optional[str] = None
     category: Optional[str] = None
 
-
 class MealItemCreate(MealItemBase):
     pass
 
-
 class MealItemResponse(MealItemBase):
     model_config = ConfigDict(from_attributes=True)
-
     id: int
-
 
 class MealBase(BaseModel):
     day_number: int
@@ -29,18 +25,15 @@ class MealBase(BaseModel):
     fat_g: Optional[float] = None
     recipe_notes: Optional[str] = None
 
-
 class MealCreate(MealBase):
-    items: list[MealItemCreate] = []
-
+    items: List[MealItemCreate] = []
 
 class MealResponse(MealBase):
     model_config = ConfigDict(from_attributes=True)
-
     id: int
-    items: list[MealItemResponse] = []
+    items: List[MealItemResponse] = []
 
-
+# --- Plans ---
 class MealPlanBase(BaseModel):
     name: str
     goal: Optional[str] = None
@@ -49,11 +42,10 @@ class MealPlanBase(BaseModel):
     target_carbs_g: Optional[int] = None
     target_fat_g: Optional[int] = None
     duration_days: int = 7
-
+    is_ai_generated: bool = False
 
 class MealPlanCreate(MealPlanBase):
-    pass
-
+    meals: Optional[List[MealCreate]] = []
 
 class MealPlanUpdate(BaseModel):
     name: Optional[str] = None
@@ -64,15 +56,12 @@ class MealPlanUpdate(BaseModel):
     target_fat_g: Optional[int] = None
     duration_days: Optional[int] = None
 
-
 class MealPlanResponse(MealPlanBase):
     model_config = ConfigDict(from_attributes=True)
-
     id: int
     is_active: bool
-    meals: list[MealResponse] = []
+    meals: List[MealResponse] = []
     created_at: datetime
-
 
 class GenerateMealRequest(BaseModel):
     goal: str
@@ -81,4 +70,36 @@ class GenerateMealRequest(BaseModel):
     target_carbs_g: int
     target_fat_g: int
     duration_days: int = 7
-    dietary_restrictions: list[str] = []
+    dietary_restrictions: List[str] = []
+
+# --- Food Items & Logging ---
+class FoodItemBase(BaseModel):
+    name: str
+    calories: int
+    protein_g: float
+    carbs_g: float
+    fat_g: float
+    serving_size: Optional[str] = None
+
+class FoodItemCreate(FoodItemBase):
+    pass
+
+class FoodItemResponse(FoodItemBase):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+
+class NutritionLogBase(BaseModel):
+    name: str
+    calories: int
+    protein_g: float
+    carbs_g: float
+    fat_g: float
+
+class NutritionLogCreate(NutritionLogBase):
+    pass
+
+class NutritionLogResponse(NutritionLogBase):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    user_id: int
+    consumed_at: datetime
