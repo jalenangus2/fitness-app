@@ -46,34 +46,3 @@ class GenerateWorkoutRequest(BaseModel):
     difficulty: str = "intermediate"
     duration_mins: int = 60
     notes: str = ""
-
-# --- Live Tracking (Sessions & Logs) ---
-class ExerciseLogBase(BaseModel):
-    exercise_name: str
-    set_number: int
-    reps_completed: Optional[int] = None
-    weight_lbs: Optional[float] = None
-    duration_seconds: Optional[int] = None
-
-class ExerciseLogCreate(ExerciseLogBase):
-    pass
-
-class ExerciseLogResponse(ExerciseLogBase):
-    model_config = ConfigDict(from_attributes=True)
-    id: int
-    session_id: int
-
-class WorkoutSessionBase(BaseModel):
-    plan_id: Optional[int] = None
-    notes: Optional[str] = None
-
-class WorkoutSessionCreate(WorkoutSessionBase):
-    pass
-
-class WorkoutSessionResponse(WorkoutSessionBase):
-    model_config = ConfigDict(from_attributes=True)
-    id: int
-    user_id: int
-    start_time: datetime
-    end_time: Optional[datetime] = None
-    logs: list[ExerciseLogResponse] = []

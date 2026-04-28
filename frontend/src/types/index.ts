@@ -25,6 +25,7 @@ export interface WorkoutPlan {
   duration_mins: number | null
   notes: string | null
   is_active: boolean
+  is_ai_generated: boolean
   exercises: WorkoutExercise[]
   created_at: string
 }

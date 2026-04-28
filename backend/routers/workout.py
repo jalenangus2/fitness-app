@@ -1,19 +1,16 @@
-"""Workout plans router: CRUD + AI generation + activation + live tracking."""
+"""Workout plans router: CRUD + AI generation + activation."""
 import json
-from datetime import datetime
-from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..models.workout import WorkoutExercise, WorkoutPlan, WorkoutSession, ExerciseLog
+from ..models.workout import WorkoutExercise, WorkoutPlan
 from ..routers.auth import get_current_user
 from ..models.user import User
 from ..schemas.workout import (
     GenerateWorkoutRequest, WorkoutExerciseResponse, WorkoutPlanCreate,
-    WorkoutPlanResponse, WorkoutPlanUpdate, WorkoutSessionCreate,
-    WorkoutSessionResponse, ExerciseLogCreate, ExerciseLogResponse
+    WorkoutPlanResponse, WorkoutPlanUpdate,
 )
 from ..services import claude_service
 
@@ -106,35 +103,3 @@ def generate_workout_plan(data: GenerateWorkoutRequest, current_user: User = Dep
     db.refresh(plan)
     return _serialize_plan(plan)
 
-# --- LIVE TRACKING (SESSIONS) ---
-@router.post("/sessions", response_model=WorkoutSessionResponse)
-def start_session(data: WorkoutSessionCreate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    session = WorkoutSession(user_id=current_user.id, plan_id=data.plan_id, notes=data.notes)
-    db.add(session)
-    db.commit()
-    db.refresh(session)
-    return session
-
-@router.post("/sessions/{session_id}/logs", response_model=ExerciseLogResponse)
-def log_exercise_set(session_id: int, data: ExerciseLogCreate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    session = db.query(WorkoutSession).filter(WorkoutSession.id == session_id, WorkoutSession.user_id == current_user.id).first()
-    if not session: raise HTTPException(status_code=404, detail="Session not found")
-    
-    log = ExerciseLog(
-        session_id=session.id, exercise_name=data.exercise_name,
-        set_number=data.set_number, reps_completed=data.reps_completed,
-        weight_lbs=data.weight_lbs, duration_seconds=data.duration_seconds
-    )
-    db.add(log)
-    db.commit()
-    db.refresh(log)
-    return log
-
-@router.patch("/sessions/{session_id}/finish", response_model=WorkoutSessionResponse)
-def finish_session(session_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    session = db.query(WorkoutSession).filter(WorkoutSession.id == session_id, WorkoutSession.user_id == current_user.id).first()
-    if not session: raise HTTPException(status_code=404, detail="Session not found")
-    session.end_time = datetime.utcnow()
-    db.commit()
-    db.refresh(session)
-    return session
