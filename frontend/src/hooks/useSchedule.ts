@@ -71,3 +71,11 @@ export function useCompleteTask() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['tasks'] }),
   })
 }
+
+export function useFashionSync() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: api.fashionSync,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['events'] }),
+  })
+}

@@ -122,6 +122,7 @@ export interface CalendarEvent {
   color: string
   recurrence_rule: string | null
   created_at: string
+  is_recurring_instance?: boolean
 }
 
 export interface Task {
@@ -131,6 +132,7 @@ export interface Task {
   is_completed: boolean
   priority: 'low' | 'medium' | 'high'
   category: string | null
+  recurrence_rule: string | null
   created_at: string
 }
 
