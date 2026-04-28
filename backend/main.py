@@ -10,9 +10,25 @@ from .routers import auth, workout, meal, shopping, schedule, fashion, dashboard
 import os
 print(f"DEBUG: Plaid ID is {os.getenv('PLAID_CLIENT_ID')}")
 
+def _run_migrations() -> None:
+    """Add columns that were added after initial table creation (SQLite doesn't auto-migrate)."""
+    from sqlalchemy import text
+    stmts = [
+        "ALTER TABLE tasks ADD COLUMN recurrence_rule TEXT",
+    ]
+    with engine.connect() as conn:
+        for sql in stmts:
+            try:
+                conn.execute(text(sql))
+                conn.commit()
+            except Exception:
+                pass  # column already exists
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     Base.metadata.create_all(bind=engine)
+    _run_migrations()
     yield
 
 

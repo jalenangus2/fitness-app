@@ -58,29 +58,41 @@ export default function SchedulePage() {
 
   const handleCreateEvent = async () => {
     if (!eventForm.title || !eventForm.start_datetime) { toast('Title and start time required.', 'error'); return }
-    await createEvent.mutateAsync({
-      ...eventForm,
-      recurrence_rule: eventForm.recurrence_rule || null,
-    } as Partial<CalendarEvent>)
-    toast('Event created!', 'success')
-    setShowEventModal(false)
-    setEventForm({ title: '', description: '', start_datetime: '', end_datetime: '', all_day: false, color: '#6366f1', recurrence_rule: '' })
+    try {
+      await createEvent.mutateAsync({
+        ...eventForm,
+        recurrence_rule: eventForm.recurrence_rule || null,
+      } as Partial<CalendarEvent>)
+      toast('Event created!', 'success')
+      setShowEventModal(false)
+      setEventForm({ title: '', description: '', start_datetime: '', end_datetime: '', all_day: false, color: '#6366f1', recurrence_rule: '' })
+    } catch {
+      toast('Failed to create event. Please try again.', 'error')
+    }
   }
 
   const handleCreateTask = async () => {
     if (!taskForm.title) { toast('Task title required.', 'error'); return }
-    await createTask.mutateAsync({
-      ...taskForm,
-      recurrence_rule: taskForm.recurrence_rule || null,
-    } as any)
-    toast('Task added!', 'success')
-    setShowTaskModal(false)
-    setTaskForm({ title: '', due_date: '', priority: 'medium', category: 'personal', recurrence_rule: '' })
+    try {
+      await createTask.mutateAsync({
+        ...taskForm,
+        recurrence_rule: taskForm.recurrence_rule || null,
+      } as any)
+      toast('Task added!', 'success')
+      setShowTaskModal(false)
+      setTaskForm({ title: '', due_date: '', priority: 'medium', category: 'personal', recurrence_rule: '' })
+    } catch {
+      toast('Failed to create task. Please try again.', 'error')
+    }
   }
 
   const handleFashionSync = async () => {
-    const result = await fashionSync.mutateAsync()
-    toast(result.synced > 0 ? `Synced ${result.synced} fashion drop${result.synced !== 1 ? 's' : ''} to calendar!` : 'All fashion drops already synced.', 'success')
+    try {
+      const result = await fashionSync.mutateAsync()
+      toast(result.synced > 0 ? `Synced ${result.synced} fashion drop${result.synced !== 1 ? 's' : ''} to calendar!` : 'All fashion drops already synced.', 'success')
+    } catch {
+      toast('Fashion sync failed. Please try again.', 'error')
+    }
   }
 
   // Build calendar grid
