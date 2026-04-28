@@ -32,6 +32,7 @@ class EventResponse(EventBase):
 
     id: int
     created_at: datetime
+    is_recurring_instance: bool = False
 
 
 class TaskBase(BaseModel):
@@ -39,6 +40,7 @@ class TaskBase(BaseModel):
     due_date: Optional[date] = None
     priority: str = "medium"
     category: Optional[str] = None
+    recurrence_rule: Optional[str] = None
 
 
 class TaskCreate(TaskBase):
@@ -51,6 +53,7 @@ class TaskUpdate(BaseModel):
     is_completed: Optional[bool] = None
     priority: Optional[str] = None
     category: Optional[str] = None
+    recurrence_rule: Optional[str] = None
 
 
 class TaskResponse(TaskBase):

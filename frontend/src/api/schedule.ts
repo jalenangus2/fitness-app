@@ -43,3 +43,8 @@ export const completeTask = async (id: number): Promise<Task> => {
   const res = await client.patch(`/schedule/tasks/${id}/complete`)
   return res.data
 }
+
+export const fashionSync = async (): Promise<{ synced: number }> => {
+  const res = await client.post('/schedule/fashion-sync')
+  return res.data
+}

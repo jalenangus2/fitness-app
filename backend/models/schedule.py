@@ -32,6 +32,7 @@ class Task(Base):
     is_completed: Mapped[bool] = mapped_column(Boolean, default=False)
     priority: Mapped[str] = mapped_column(Text, default="medium")
     category: Mapped[str] = mapped_column(Text, nullable=True)
+    recurrence_rule: Mapped[str] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

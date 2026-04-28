@@ -1,5 +1,6 @@
 """Schedule router: events and tasks CRUD."""
-from datetime import datetime, date
+import calendar as cal_module
+from datetime import datetime, date, timedelta
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -21,39 +22,127 @@ from ..schemas.schedule import (
 router = APIRouter()
 
 
+# ─── Recurrence helpers ───────────────────────────────────────────────────────
+
+def _add_recurrence_delta(dt: datetime, rule: str) -> datetime:
+    if rule == 'DAILY':
+        return dt + timedelta(days=1)
+    elif rule == 'WEEKLY':
+        return dt + timedelta(weeks=1)
+    elif rule == 'MONTHLY':
+        month = dt.month + 1
+        year = dt.year + (1 if month > 12 else 0)
+        month = month if month <= 12 else month - 12
+        day = min(dt.day, cal_module.monthrange(year, month)[1])
+        return dt.replace(year=year, month=month, day=day)
+    elif rule == 'YEARLY':
+        return dt.replace(year=dt.year + 1)
+    return dt
+
+
+def _next_date(current: date, rule: str) -> date:
+    if rule == 'DAILY':
+        return current + timedelta(days=1)
+    elif rule == 'WEEKLY':
+        return current + timedelta(weeks=1)
+    elif rule == 'MONTHLY':
+        month = current.month + 1
+        year = current.year + (1 if month > 12 else 0)
+        month = month if month <= 12 else month - 12
+        day = min(current.day, cal_module.monthrange(year, month)[1])
+        return current.replace(year=year, month=month, day=day)
+    elif rule == 'YEARLY':
+        return current.replace(year=current.year + 1)
+    return current
+
+
+def _expand_event(event: Event, start_dt: datetime, end_dt: datetime) -> list[EventResponse]:
+    rule = event.recurrence_rule
+    if not rule or event.start_datetime > end_dt:
+        return []
+
+    duration: Optional[timedelta] = None
+    if event.end_datetime and event.start_datetime:
+        duration = event.end_datetime - event.start_datetime
+
+    current = event.start_datetime
+
+    # Advance to first occurrence >= start_dt
+    advances = 0
+    while current < start_dt and advances < 2000:
+        current = _add_recurrence_delta(current, rule)
+        advances += 1
+
+    occurrences: list[EventResponse] = []
+    count = 0
+    while current <= end_dt and count < 200:
+        occurrences.append(EventResponse(
+            id=event.id,
+            title=event.title,
+            description=event.description,
+            start_datetime=current,
+            end_datetime=current + duration if duration else None,
+            all_day=event.all_day,
+            color=event.color,
+            recurrence_rule=event.recurrence_rule,
+            created_at=event.created_at,
+            is_recurring_instance=True,
+        ))
+        current = _add_recurrence_delta(current, rule)
+        count += 1
+
+    return occurrences
+
+
 # ─── Events ──────────────────────────────────────────────────────────────────
 
 @router.get("/events", response_model=list[EventResponse])
 def list_events(
-    start: Optional[str] = Query(None, description="ISO datetime filter start"),
-    end: Optional[str] = Query(None, description="ISO datetime filter end"),
+    start: Optional[str] = Query(None),
+    end: Optional[str] = Query(None),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    query = db.query(Event).filter(Event.user_id == current_user.id)
+    start_dt: Optional[datetime] = None
+    end_dt: Optional[datetime] = None
 
     if start:
         try:
             start_dt = datetime.fromisoformat(start)
-            query = query.filter(Event.start_datetime >= start_dt)
         except ValueError:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid start datetime format. Use ISO 8601.",
-            )
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid start datetime format.")
 
     if end:
         try:
             end_dt = datetime.fromisoformat(end)
-            query = query.filter(Event.start_datetime <= end_dt)
         except ValueError:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid end datetime format. Use ISO 8601.",
-            )
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid end datetime format.")
 
-    events = query.order_by(Event.start_datetime).all()
-    return events
+    base_query = db.query(Event).filter(Event.user_id == current_user.id)
+
+    if start_dt and end_dt:
+        # Non-recurring: filter by date range
+        one_time = base_query.filter(
+            Event.recurrence_rule.is_(None),
+            Event.start_datetime >= start_dt,
+            Event.start_datetime <= end_dt,
+        ).all()
+        # Recurring: fetch all (to expand occurrences within range)
+        recurring = base_query.filter(Event.recurrence_rule.isnot(None)).all()
+    else:
+        one_time = base_query.filter(Event.recurrence_rule.is_(None)).order_by(Event.start_datetime).all()
+        recurring = base_query.filter(Event.recurrence_rule.isnot(None)).order_by(Event.start_datetime).all()
+
+    result: list[EventResponse] = [EventResponse.model_validate(e) for e in one_time]
+
+    for ev in recurring:
+        if start_dt and end_dt:
+            result.extend(_expand_event(ev, start_dt, end_dt))
+        else:
+            result.append(EventResponse.model_validate(ev))
+
+    result.sort(key=lambda e: e.start_datetime)
+    return result
 
 
 @router.post("/events", response_model=EventResponse, status_code=status.HTTP_201_CREATED)
@@ -75,7 +164,7 @@ def create_event(
     db.add(event)
     db.commit()
     db.refresh(event)
-    return event
+    return EventResponse.model_validate(event)
 
 
 @router.get("/events/{event_id}", response_model=EventResponse)
@@ -84,12 +173,10 @@ def get_event(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    event = db.query(Event).filter(
-        Event.id == event_id, Event.user_id == current_user.id
-    ).first()
+    event = db.query(Event).filter(Event.id == event_id, Event.user_id == current_user.id).first()
     if not event:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Event not found")
-    return event
+    return EventResponse.model_validate(event)
 
 
 @router.put("/events/{event_id}", response_model=EventResponse)
@@ -99,31 +186,16 @@ def update_event(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    event = db.query(Event).filter(
-        Event.id == event_id, Event.user_id == current_user.id
-    ).first()
+    event = db.query(Event).filter(Event.id == event_id, Event.user_id == current_user.id).first()
     if not event:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Event not found")
 
-    if data.title is not None:
-        event.title = data.title
-    if data.description is not None:
-        event.description = data.description
-    if data.start_datetime is not None:
-        event.start_datetime = data.start_datetime
-    if data.end_datetime is not None:
-        event.end_datetime = data.end_datetime
-    if data.all_day is not None:
-        event.all_day = data.all_day
-    if data.color is not None:
-        event.color = data.color
-    if data.recurrence_rule is not None:
-        event.recurrence_rule = data.recurrence_rule
-
+    for field, value in data.model_dump(exclude_unset=True).items():
+        setattr(event, field, value)
     event.updated_at = datetime.utcnow()
     db.commit()
     db.refresh(event)
-    return event
+    return EventResponse.model_validate(event)
 
 
 @router.delete("/events/{event_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -132,21 +204,63 @@ def delete_event(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    event = db.query(Event).filter(
-        Event.id == event_id, Event.user_id == current_user.id
-    ).first()
+    event = db.query(Event).filter(Event.id == event_id, Event.user_id == current_user.id).first()
     if not event:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Event not found")
     db.delete(event)
     db.commit()
 
 
+# ─── Fashion sync ─────────────────────────────────────────────────────────────
+
+@router.post("/fashion-sync")
+def fashion_sync(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    from ..models.fashion import FashionRelease
+
+    today = date.today()
+    releases = db.query(FashionRelease).filter(
+        FashionRelease.user_id == current_user.id,
+        FashionRelease.release_date >= today,
+    ).all()
+
+    created = 0
+    for release in releases:
+        title = f"🛍 {release.brand} – {release.name}"
+        release_dt = datetime.combine(release.release_date, datetime.min.time())
+        existing = db.query(Event).filter(
+            Event.user_id == current_user.id,
+            Event.title == title,
+        ).first()
+        if not existing:
+            parts = [release.category]
+            if release.colorway:
+                parts.append(release.colorway)
+            if release.notes:
+                parts.append(release.notes)
+            event = Event(
+                user_id=current_user.id,
+                title=title,
+                description=" · ".join(parts),
+                start_datetime=release_dt,
+                all_day=True,
+                color="#f59e0b",
+            )
+            db.add(event)
+            created += 1
+
+    db.commit()
+    return {"synced": created}
+
+
 # ─── Tasks ───────────────────────────────────────────────────────────────────
 
 @router.get("/tasks", response_model=list[TaskResponse])
 def list_tasks(
-    due_date: Optional[date] = Query(None, description="Filter by due date (YYYY-MM-DD)"),
-    is_completed: Optional[bool] = Query(None, description="Filter by completion status"),
+    due_date: Optional[date] = Query(None),
+    is_completed: Optional[bool] = Query(None),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -174,6 +288,7 @@ def create_task(
         due_date=data.due_date,
         priority=data.priority,
         category=data.category,
+        recurrence_rule=data.recurrence_rule,
     )
     db.add(task)
     db.commit()
@@ -187,9 +302,7 @@ def get_task(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    task = db.query(Task).filter(
-        Task.id == task_id, Task.user_id == current_user.id
-    ).first()
+    task = db.query(Task).filter(Task.id == task_id, Task.user_id == current_user.id).first()
     if not task:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
     return task
@@ -202,23 +315,12 @@ def update_task(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    task = db.query(Task).filter(
-        Task.id == task_id, Task.user_id == current_user.id
-    ).first()
+    task = db.query(Task).filter(Task.id == task_id, Task.user_id == current_user.id).first()
     if not task:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
 
-    if data.title is not None:
-        task.title = data.title
-    if data.due_date is not None:
-        task.due_date = data.due_date
-    if data.is_completed is not None:
-        task.is_completed = data.is_completed
-    if data.priority is not None:
-        task.priority = data.priority
-    if data.category is not None:
-        task.category = data.category
-
+    for field, value in data.model_dump(exclude_unset=True).items():
+        setattr(task, field, value)
     task.updated_at = datetime.utcnow()
     db.commit()
     db.refresh(task)
@@ -231,9 +333,7 @@ def delete_task(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    task = db.query(Task).filter(
-        Task.id == task_id, Task.user_id == current_user.id
-    ).first()
+    task = db.query(Task).filter(Task.id == task_id, Task.user_id == current_user.id).first()
     if not task:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
     db.delete(task)
@@ -246,14 +346,26 @@ def complete_task(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    task = db.query(Task).filter(
-        Task.id == task_id, Task.user_id == current_user.id
-    ).first()
+    task = db.query(Task).filter(Task.id == task_id, Task.user_id == current_user.id).first()
     if not task:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
 
     task.is_completed = True
     task.updated_at = datetime.utcnow()
+
+    # Auto-spawn next occurrence for recurring tasks
+    if task.recurrence_rule and task.due_date:
+        next_due = _next_date(task.due_date, task.recurrence_rule)
+        next_task = Task(
+            user_id=task.user_id,
+            title=task.title,
+            due_date=next_due,
+            priority=task.priority,
+            category=task.category,
+            recurrence_rule=task.recurrence_rule,
+        )
+        db.add(next_task)
+
     db.commit()
     db.refresh(task)
     return task
