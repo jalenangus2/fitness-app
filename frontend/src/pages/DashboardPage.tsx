@@ -20,13 +20,24 @@ function weatherIcon(code: number) {
 
 function WeatherCard() {
   const { data, isLoading, isError } = useWeather()
+
   if (isLoading) return (
     <Card className="flex items-center gap-3 py-4">
       <Spinner size="sm" />
       <span className="text-slate-400 text-sm">Loading weather…</span>
     </Card>
   )
-  if (isError || !data) return null
+
+  if (isError || !data) return (
+    <Card className="flex items-center gap-3 py-3">
+      <Cloud size={24} className="text-slate-600 flex-shrink-0" />
+      <div>
+        <p className="text-sm text-slate-400">Weather unavailable</p>
+        <p className="text-xs text-slate-500 flex items-center gap-1"><MapPin size={10} />Greensboro, NC</p>
+      </div>
+    </Card>
+  )
+
   return (
     <Card className="flex items-center justify-between">
       <div className="flex items-center gap-4">
