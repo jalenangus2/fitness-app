@@ -61,22 +61,30 @@ export default function MealPage() {
   }
 
   const handleCreatePlan = async () => {
-    if (createMode === 'ai') {
-      await generate.mutateAsync({ ...form, dietary_restrictions: form.dietary_restrictions.map(r => r.toLowerCase()) })
-      toast('Meal plan generated!', 'success')
-    } else {
-      await createManual.mutateAsync({ ...form, is_ai_generated: false, meals: [] })
-      toast('Manual plan created. Edit it to add meals.', 'success')
+    try {
+      if (createMode === 'ai') {
+        await generate.mutateAsync({ ...form, dietary_restrictions: form.dietary_restrictions.map(r => r.toLowerCase()) })
+        toast('Meal plan generated!', 'success')
+      } else {
+        await createManual.mutateAsync({ ...form, is_ai_generated: false, meals: [] })
+        toast('Manual plan created. Edit it to add meals.', 'success')
+      }
+      setShowPlanModal(false)
+    } catch {
+      toast('Failed to create plan. Please try again.', 'error')
     }
-    setShowPlanModal(false)
   }
 
   const handleLogNutrition = async () => {
     if (!logForm.name || logForm.calories <= 0) return toast('Please enter a valid food name and calories.', 'error')
-    await logNutrients.mutateAsync(logForm)
-    toast('Food logged!', 'success')
-    setShowLogModal(false)
-    setLogForm({ name: '', calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 })
+    try {
+      await logNutrients.mutateAsync(logForm)
+      toast('Food logged!', 'success')
+      setShowLogModal(false)
+      setLogForm({ name: '', calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 })
+    } catch {
+      toast('Failed to log food. Please try again.', 'error')
+    }
   }
 
   if (isLoading) return <div className="flex justify-center h-64"><Spinner size="lg" /></div>
