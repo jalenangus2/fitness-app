@@ -10,6 +10,14 @@ export function useMealPlan(id: number) {
   return useQuery({ queryKey: ['meal-plans', id], queryFn: () => api.getMealPlan(id), enabled: !!id })
 }
 
+export function useCreateMealPlan() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (data: any) => api.createMealPlan(data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['meal-plans'] }),
+  })
+}
+
 export function useGenerateMealPlan() {
   const qc = useQueryClient()
   return useMutation({
@@ -31,5 +39,25 @@ export function useDeleteMealPlan() {
   return useMutation({
     mutationFn: (id: number) => api.deleteMealPlan(id),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['meal-plans'] }),
+  })
+}
+
+export function useDailyNutrition() {
+  return useQuery({ queryKey: ['nutrition-logs'], queryFn: api.getDailyNutrition })
+}
+
+export function useLogNutrition() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (data: api.NutritionLog) => api.logNutrition(data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['nutrition-logs'] }),
+  })
+}
+
+export function useSearchFoods(query: string) {
+  return useQuery({
+    queryKey: ['foods', query],
+    queryFn: () => api.searchFoods(query),
+    enabled: query.length > 2,
   })
 }

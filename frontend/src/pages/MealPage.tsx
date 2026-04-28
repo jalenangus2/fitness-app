@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react'
-import { Plus, Zap, CheckCircle, Trash2, ChevronDown, ChevronUp, UtensilsCrossed, ShoppingCart, Search } from 'lucide-react'
-import { useMealPlans, useGenerateMealPlan, useCreateMealPlan, useActivateMealPlan, useDeleteMealPlan, useDailyNutrition, useLogNutrition } from '../hooks/useMeal'
+import { Plus, Zap, CheckCircle, Trash2, ChevronDown, ShoppingCart, Search } from 'lucide-react'
+import { useMealPlans, useGenerateMealPlan, useCreateMealPlan, useActivateMealPlan, useDeleteMealPlan, useDailyNutrition, useLogNutrition, useSearchFoods } from '../hooks/useMeal'
 import { useCreateShoppingList } from '../hooks/useShopping'
 import { useToast } from '../components/ui/Toast'
 import Card from '../components/ui/Card'
@@ -10,7 +10,6 @@ import Badge from '../components/ui/Badge'
 import Select from '../components/ui/Select'
 import Input from '../components/ui/Input'
 import Spinner from '../components/ui/Spinner'
-import type { MealPlan } from '../types'
 
 const GOAL_OPTIONS = [{ value: 'weight_loss', label: 'Weight Loss' }, { value: 'muscle_gain', label: 'Muscle Gain' }, { value: 'maintenance', label: 'Maintenance' }, { value: 'keto', label: 'Keto' }, { value: 'vegan', label: 'Vegan' }]
 const RESTRICTION_OPTIONS = ['Vegetarian', 'Vegan', 'Gluten-Free', 'Dairy-Free', 'Nut-Free', 'Halal', 'Kosher']
@@ -37,6 +36,8 @@ export default function MealPage() {
   // Forms
   const [form, setForm] = useState({ name: '', goal: 'muscle_gain', target_calories: 2500, target_protein_g: 180, target_carbs_g: 250, target_fat_g: 80, duration_days: 7, dietary_restrictions: [] as string[] })
   const [logForm, setLogForm] = useState({ name: '', calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 })
+  const [foodSearch, setFoodSearch] = useState('')
+  const { data: foodResults = [] } = useSearchFoods(foodSearch)
 
   const activePlan = plans.find(p => p.is_active)
   
@@ -85,27 +86,15 @@ export default function MealPage() {
       
       {/* MACRO DASHBOARD */}
       <Card className="bg-slate-800 border-slate-700">
-        <div className="flex justify-between items-center mb-4">
+        <div className="flex justify-between items-center mb-5">
           <h2 className="text-lg font-bold text-slate-100">Today's Nutrition</h2>
           <Button size="sm" onClick={() => setShowLogModal(true)}><Plus size={14} className="mr-1"/> Quick Add</Button>
         </div>
-        
-        {/* Calories Progress Bar */}
-        <div className="mb-6">
-           <div className="flex justify-between text-sm mb-1 text-slate-300">
-             <span>Calories</span>
-             <span>{dailyTotals.cals} / {dailyTargets.cals} kcal</span>
-           </div>
-           <div className="h-3 w-full bg-slate-700 rounded-full overflow-hidden">
-             <div className="h-full bg-emerald-500 transition-all duration-500" style={{ width: `${Math.min(100, (dailyTotals.cals / dailyTargets.cals) * 100)}%` }} />
-           </div>
-        </div>
-
-        {/* Macros Progress Bars */}
-        <div className="grid grid-cols-3 gap-4">
-          <MacroBar label="Protein" current={dailyTotals.prot} target={dailyTargets.prot} color="bg-blue-500" />
-          <MacroBar label="Carbs" current={dailyTotals.carb} target={dailyTargets.carb} color="bg-amber-500" />
-          <MacroBar label="Fats" current={dailyTotals.fat} target={dailyTargets.fat} color="bg-rose-500" />
+        <div className="grid grid-cols-4 gap-3">
+          <MacroRing label="Calories" current={Math.round(dailyTotals.cals)} target={dailyTargets.cals} unit="kcal" color="#10b981" />
+          <MacroRing label="Protein" current={Math.round(dailyTotals.prot)} target={dailyTargets.prot} unit="g" color="#3b82f6" />
+          <MacroRing label="Carbs" current={Math.round(dailyTotals.carb)} target={dailyTargets.carb} unit="g" color="#f59e0b" />
+          <MacroRing label="Fats" current={Math.round(dailyTotals.fat)} target={dailyTargets.fat} unit="g" color="#f43f5e" />
         </div>
       </Card>
 
@@ -131,17 +120,43 @@ export default function MealPage() {
       </div>
 
       {/* QUICK ADD LOG MODAL */}
-      <Modal isOpen={showLogModal} onClose={() => setShowLogModal(false)} title="Log Food">
+      <Modal isOpen={showLogModal} onClose={() => { setShowLogModal(false); setFoodSearch('') }} title="Log Food">
         <div className="space-y-4">
           <div className="relative">
-             <Input label="Food Name" value={logForm.name} onChange={e => setLogForm({...logForm, name: e.target.value})} placeholder="e.g. Chicken Breast" autoFocus />
-             <Search className="absolute right-3 top-9 text-slate-500" size={16} />
+            <Input
+              label="Search Food"
+              value={foodSearch || logForm.name}
+              onChange={e => {
+                setFoodSearch(e.target.value)
+                setLogForm(f => ({ ...f, name: e.target.value }))
+              }}
+              placeholder="e.g. Chicken Breast"
+              autoFocus
+            />
+            <Search className="absolute right-3 top-9 text-slate-500 pointer-events-none" size={16} />
+            {foodResults.length > 0 && foodSearch.length > 2 && (
+              <ul className="absolute z-10 left-0 right-0 mt-1 bg-slate-800 border border-slate-600 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                {foodResults.map(food => (
+                  <li
+                    key={food.id}
+                    className="px-3 py-2 cursor-pointer hover:bg-slate-700 border-b border-slate-700/50 last:border-0"
+                    onClick={() => {
+                      setLogForm({ name: food.name, calories: food.calories, protein_g: food.protein_g, carbs_g: food.carbs_g, fat_g: food.fat_g })
+                      setFoodSearch('')
+                    }}
+                  >
+                    <span className="text-sm text-slate-200">{food.name}</span>
+                    <span className="text-xs text-slate-500 ml-2">{food.calories} kcal · P:{food.protein_g}g · C:{food.carbs_g}g · F:{food.fat_g}g</span>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
           <div className="grid grid-cols-2 gap-4">
-             <Input label="Calories" type="number" value={logForm.calories} onChange={e => setLogForm({...logForm, calories: Number(e.target.value)})} />
-             <Input label="Protein (g)" type="number" value={logForm.protein_g} onChange={e => setLogForm({...logForm, protein_g: Number(e.target.value)})} />
-             <Input label="Carbs (g)" type="number" value={logForm.carbs_g} onChange={e => setLogForm({...logForm, carbs_g: Number(e.target.value)})} />
-             <Input label="Fat (g)" type="number" value={logForm.fat_g} onChange={e => setLogForm({...logForm, fat_g: Number(e.target.value)})} />
+            <Input label="Calories" type="number" value={logForm.calories} onChange={e => setLogForm({...logForm, calories: Number(e.target.value)})} />
+            <Input label="Protein (g)" type="number" value={logForm.protein_g} onChange={e => setLogForm({...logForm, protein_g: Number(e.target.value)})} />
+            <Input label="Carbs (g)" type="number" value={logForm.carbs_g} onChange={e => setLogForm({...logForm, carbs_g: Number(e.target.value)})} />
+            <Input label="Fat (g)" type="number" value={logForm.fat_g} onChange={e => setLogForm({...logForm, fat_g: Number(e.target.value)})} />
           </div>
           <Button onClick={handleLogNutrition} className="w-full">Log Nutrition</Button>
         </div>
@@ -189,15 +204,30 @@ export default function MealPage() {
 }
 
 // --- SUB-COMPONENTS ---
-function MacroBar({ label, current, target, color }: { label: string, current: number, target: number, color: string }) {
-  const pct = Math.min(100, target > 0 ? (current / target) * 100 : 0)
+const CIRCUMFERENCE = 2 * Math.PI * 40 // r=40
+
+function MacroRing({ label, current, target, unit, color }: { label: string; current: number; target: number; unit: string; color: string }) {
+  const pct = target > 0 ? Math.min(1, current / target) : 0
+  const dash = pct * CIRCUMFERENCE
   return (
-    <div className="text-center bg-slate-900 rounded-lg p-2 border border-slate-700/50">
-       <p className="text-xs text-slate-400 mb-1 font-medium tracking-wide uppercase">{label}</p>
-       <div className="h-1.5 w-full bg-slate-700 rounded-full mb-1 overflow-hidden">
-          <div className={`h-full ${color} transition-all duration-500`} style={{ width: `${pct}%` }} />
-       </div>
-       <p className="text-sm text-slate-200 font-semibold">{Math.round(current)}<span className="text-xs font-normal text-slate-500">/{target}g</span></p>
+    <div className="flex flex-col items-center gap-1">
+      <div className="relative w-20 h-20">
+        <svg viewBox="0 0 100 100" className="-rotate-90 w-full h-full">
+          <circle cx="50" cy="50" r="40" fill="none" stroke="#1e293b" strokeWidth="10" />
+          <circle
+            cx="50" cy="50" r="40" fill="none"
+            stroke={color} strokeWidth="10" strokeLinecap="round"
+            strokeDasharray={`${dash} ${CIRCUMFERENCE}`}
+            style={{ transition: 'stroke-dasharray 0.5s ease' }}
+          />
+        </svg>
+        <div className="absolute inset-0 flex flex-col items-center justify-center">
+          <span className="text-sm font-bold text-slate-100 leading-none">{current}</span>
+          <span className="text-[10px] text-slate-500 leading-none">{unit}</span>
+        </div>
+      </div>
+      <p className="text-xs text-slate-400 font-medium">{label}</p>
+      <p className="text-[10px] text-slate-600">{target}{unit}</p>
     </div>
   )
 }

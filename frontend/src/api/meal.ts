@@ -1,60 +1,49 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import * as api from '../api/meal'
-import type { GenerateMealRequest, MealPlan } from '../types'
+import client from './client'
+import type { MealPlan, GenerateMealRequest } from '../types'
 
-export function useMealPlans() {
-  return useQuery({ queryKey: ['meal-plans'], queryFn: api.getMealPlans })
+export interface NutritionLog {
+  id?: number
+  name: string
+  calories: number
+  protein_g: number
+  carbs_g: number
+  fat_g: number
+  consumed_at?: string
 }
 
-export function useCreateMealPlan() {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: (data: Partial<MealPlan>) => api.createMealPlan(data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['meal-plans'] }),
-  })
+export interface FoodItem {
+  id?: number
+  name: string
+  calories: number
+  protein_g: number
+  carbs_g: number
+  fat_g: number
+  serving_size?: string | null
 }
 
-export function useGenerateMealPlan() {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: (data: GenerateMealRequest) => api.generateMealPlan(data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['meal-plans'] }),
-  })
-}
+export const getMealPlans = () =>
+  client.get<MealPlan[]>('/meals/plans').then(r => r.data)
 
-export function useActivateMealPlan() {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: (id: number) => api.activateMealPlan(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['meal-plans'] }),
-  })
-}
+export const getMealPlan = (id: number) =>
+  client.get<MealPlan>(`/meals/plans/${id}`).then(r => r.data)
 
-export function useDeleteMealPlan() {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: (id: number) => api.deleteMealPlan(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['meal-plans'] }),
-  })
-}
+export const createMealPlan = (data: any) =>
+  client.post<MealPlan>('/meals/plans', data).then(r => r.data)
 
-// Logging Hooks
-export function useDailyNutrition() {
-  return useQuery({ queryKey: ['nutrition-logs'], queryFn: api.getDailyNutrition })
-}
+export const deleteMealPlan = (id: number) =>
+  client.delete(`/meals/plans/${id}`)
 
-export function useLogNutrition() {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: (data: api.NutritionLog) => api.logNutrition(data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['nutrition-logs'] }),
-  })
-}
+export const activateMealPlan = (id: number) =>
+  client.patch<MealPlan>(`/meals/plans/${id}/activate`).then(r => r.data)
 
-export function useSearchFoods(query: string) {
-  return useQuery({ 
-    queryKey: ['foods', query], 
-    queryFn: () => api.searchFoods(query),
-    enabled: query.length > 2
-  })
-}
+export const generateMealPlan = (data: GenerateMealRequest) =>
+  client.post<MealPlan>('/meals/plans/generate', data).then(r => r.data)
+
+export const getDailyNutrition = () =>
+  client.get<NutritionLog[]>('/meals/logs/today').then(r => r.data)
+
+export const logNutrition = (data: Omit<NutritionLog, 'id' | 'consumed_at'>) =>
+  client.post<NutritionLog>('/meals/logs', data).then(r => r.data)
+
+export const searchFoods = (q: string) =>
+  client.get<FoodItem[]>('/meals/foods', { params: { q } }).then(r => r.data)
