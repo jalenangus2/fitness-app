@@ -1,26 +1,49 @@
 import client from './client'
-import type { GenerateMealRequest, MealPlan } from '../types'
+import type { MealPlan, GenerateMealRequest } from '../types'
 
-export const getMealPlans = async (): Promise<MealPlan[]> => {
-  const res = await client.get('/meals/plans')
-  return res.data
+export interface NutritionLog {
+  id?: number
+  name: string
+  calories: number
+  protein_g: number
+  carbs_g: number
+  fat_g: number
+  consumed_at?: string
 }
 
-export const getMealPlan = async (id: number): Promise<MealPlan> => {
-  const res = await client.get(`/meals/plans/${id}`)
-  return res.data
+export interface FoodItem {
+  id?: number
+  name: string
+  calories: number
+  protein_g: number
+  carbs_g: number
+  fat_g: number
+  serving_size?: string | null
 }
 
-export const deleteMealPlan = async (id: number): Promise<void> => {
-  await client.delete(`/meals/plans/${id}`)
-}
+export const getMealPlans = () =>
+  client.get<MealPlan[]>('/meals/plans').then(r => r.data)
 
-export const activateMealPlan = async (id: number): Promise<MealPlan> => {
-  const res = await client.patch(`/meals/plans/${id}/activate`)
-  return res.data
-}
+export const getMealPlan = (id: number) =>
+  client.get<MealPlan>(`/meals/plans/${id}`).then(r => r.data)
 
-export const generateMealPlan = async (data: GenerateMealRequest): Promise<MealPlan> => {
-  const res = await client.post('/meals/plans/generate', data)
-  return res.data
-}
+export const createMealPlan = (data: any) =>
+  client.post<MealPlan>('/meals/plans', data).then(r => r.data)
+
+export const deleteMealPlan = (id: number) =>
+  client.delete(`/meals/plans/${id}`)
+
+export const activateMealPlan = (id: number) =>
+  client.patch<MealPlan>(`/meals/plans/${id}/activate`).then(r => r.data)
+
+export const generateMealPlan = (data: GenerateMealRequest) =>
+  client.post<MealPlan>('/meals/plans/generate', data).then(r => r.data)
+
+export const getDailyNutrition = () =>
+  client.get<NutritionLog[]>('/meals/logs/today').then(r => r.data)
+
+export const logNutrition = (data: Omit<NutritionLog, 'id' | 'consumed_at'>) =>
+  client.post<NutritionLog>('/meals/logs', data).then(r => r.data)
+
+export const searchFoods = (q: string) =>
+  client.get<FoodItem[]>('/meals/foods', { params: { q } }).then(r => r.data)
