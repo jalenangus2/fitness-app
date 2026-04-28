@@ -2,7 +2,7 @@
 from datetime import datetime, date, timedelta
 from typing import Optional
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -14,8 +14,29 @@ from ..models.shopping import ShoppingList
 from ..models.workout import WorkoutPlan
 from ..models.user import User
 from ..routers.auth import get_current_user
+from ..services.weather_service import get_daily_weather
 
 router = APIRouter()
+
+
+class WeatherResponse(BaseModel):
+    current_temp_f: float
+    temp_high_f: float
+    temp_low_f: float
+    weather_code: int
+    condition: str
+    location: str
+
+
+@router.get("/weather", response_model=WeatherResponse)
+async def get_weather(current_user: User = Depends(get_current_user)):
+    try:
+        return await get_daily_weather()
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Weather service unavailable.",
+        )
 
 
 class ActiveWorkoutSummary(BaseModel):
