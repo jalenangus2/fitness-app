@@ -12,7 +12,7 @@ from ..models.tracking import (
     BodyMetric, FoodLogEntry, RecoveryLog, SleepLog,
     WaterLog, WorkoutSession, WorkoutSetLog,
 )
-from ..models.finance import MealPlan, Transaction
+from ..models.finance import Transaction
 from ..routers.auth import get_current_user
 from ..models.user import User
 from ..schemas.tracking import (
