@@ -85,7 +85,7 @@ export default function DashboardPage() {
   )
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-5 pb-2">
       <div>
         <h1 className="text-2xl font-bold text-slate-100">
           Good {getGreeting()}, {user?.username} 👋

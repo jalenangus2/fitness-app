@@ -8,7 +8,6 @@ from .database import engine, Base
 from .routers import auth, workout, meal, shopping, schedule, fashion, dashboard, finance, tracking
 
 import os
-print(f"DEBUG: Plaid ID is {os.getenv('PLAID_CLIENT_ID')}")
 
 def _run_migrations() -> None:
     """Add columns that were added after initial table creation (SQLite doesn't auto-migrate)."""
@@ -41,13 +40,17 @@ app = FastAPI(
     redirect_slashes=False,
 )
 
+_local_origins = [
+    "http://localhost:5173", "http://127.0.0.1:5173",
+    "http://localhost:5174", "http://127.0.0.1:5174",
+    "http://localhost:5175", "http://127.0.0.1:5175",
+]
+_extra = os.getenv("ALLOWED_ORIGINS", "")
+_allowed_origins = _local_origins + [o.strip() for o in _extra.split(",") if o.strip()]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173", "http://127.0.0.1:5173",
-        "http://localhost:5174", "http://127.0.0.1:5174",
-        "http://localhost:5175", "http://127.0.0.1:5175",
-    ],
+    allow_origins=_allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

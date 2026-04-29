@@ -6,6 +6,13 @@
   body {
     @apply bg-slate-900 text-slate-100;
     font-family: 'Inter', sans-serif;
+    -webkit-tap-highlight-color: transparent;
+    overscroll-behavior: none;
+  }
+
+  /* Prevent text size inflation on iOS landscape */
+  html {
+    -webkit-text-size-adjust: 100%;
   }
 
   ::-webkit-scrollbar {
@@ -22,5 +29,15 @@
 
   ::-webkit-scrollbar-thumb:hover {
     @apply bg-slate-500;
+  }
+}
+
+@layer utilities {
+  .safe-area-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .pb-safe {
+    padding-bottom: calc(4rem + env(safe-area-inset-bottom));
   }
 }

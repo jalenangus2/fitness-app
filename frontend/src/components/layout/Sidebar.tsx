@@ -27,7 +27,7 @@ export default function Sidebar() {
   const { user, logout } = useAuthStore()
 
   return (
-    <aside className="w-64 flex-shrink-0 bg-slate-900 border-r border-slate-700/50 flex flex-col h-screen sticky top-0">
+    <aside className="hidden lg:flex w-64 flex-shrink-0 bg-slate-900 border-r border-slate-700/50 flex-col h-screen sticky top-0">
       {/* Logo */}
       <div className="p-6 border-b border-slate-700/50">
         <div className="flex items-center gap-2">
