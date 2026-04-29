@@ -15,6 +15,7 @@ def _run_migrations() -> None:
     stmts = [
         "ALTER TABLE workout_plans ADD COLUMN is_ai_generated BOOLEAN DEFAULT 0",
         "ALTER TABLE tasks ADD COLUMN recurrence_rule TEXT",
+        "ALTER TABLE meal_plans ADD COLUMN is_ai_generated BOOLEAN DEFAULT 0",
     ]
     with engine.connect() as conn:
         for sql in stmts:
