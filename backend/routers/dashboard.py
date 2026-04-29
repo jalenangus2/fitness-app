@@ -4,6 +4,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from ..database import get_db
@@ -124,7 +125,7 @@ def get_summary(
     # Active workout plan
     active_workout = db.query(WorkoutPlan).filter(
         WorkoutPlan.user_id == current_user.id,
-        WorkoutPlan.is_active == True,
+        WorkoutPlan.is_active.is_(True),
     ).first()
 
     active_workout_summary = None
@@ -142,7 +143,7 @@ def get_summary(
     # Active meal plan + today's meals
     active_meal = db.query(MealPlan).filter(
         MealPlan.user_id == current_user.id,
-        MealPlan.is_active == True,
+        MealPlan.is_active.is_(True),
     ).first()
 
     active_meal_summary = None
@@ -188,12 +189,11 @@ def get_summary(
                 fat_g=sum(m.fat_g or 0 for m in today_meals),
             )
 
-    # Today's tasks (due today or overdue and not completed)
+    # All incomplete tasks, sorted by due date (overdue first, then upcoming, then no date)
     today_tasks_db = db.query(Task).filter(
         Task.user_id == current_user.id,
-        Task.due_date <= today,
-        Task.is_completed == False,
-    ).order_by(Task.due_date.asc(), Task.priority.desc()).limit(10).all()
+        Task.is_completed.is_(False),
+    ).order_by(Task.due_date.asc().nullslast(), Task.priority.desc()).limit(10).all()
 
     today_tasks = [
         TaskSummary(
