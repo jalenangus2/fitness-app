@@ -33,12 +33,12 @@ def _serialize_plan(plan: WorkoutPlan) -> WorkoutPlanResponse:
     )
 
 # --- PLAN CRUD ---
-@router.get("/", response_model=list[WorkoutPlanResponse])
+@router.get("", response_model=list[WorkoutPlanResponse])
 def list_workout_plans(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     plans = db.query(WorkoutPlan).filter(WorkoutPlan.user_id == current_user.id).all()
     return [_serialize_plan(p) for p in plans]
 
-@router.post("/", response_model=WorkoutPlanResponse, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=WorkoutPlanResponse, status_code=status.HTTP_201_CREATED)
 def create_workout_plan(data: WorkoutPlanCreate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     plan = WorkoutPlan(
         user_id=current_user.id, name=data.name,

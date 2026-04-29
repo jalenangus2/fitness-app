@@ -19,7 +19,7 @@ from ..schemas.fashion import (
 router = APIRouter()
 
 
-@router.get("/", response_model=list[FashionReleaseResponse])
+@router.get("", response_model=list[FashionReleaseResponse])
 def list_releases(
     category: str = Query(None),
     upcoming: bool = Query(False),
@@ -35,7 +35,7 @@ def list_releases(
     return [_serialize(r) for r in releases]
 
 
-@router.post("/", response_model=FashionReleaseResponse, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=FashionReleaseResponse, status_code=status.HTTP_201_CREATED)
 def create_release(
     data: FashionReleaseCreate,
     current_user: User = Depends(get_current_user),
