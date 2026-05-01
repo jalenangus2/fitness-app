@@ -5,7 +5,11 @@ from .config import get_settings
 
 settings = get_settings()
 _url = settings.DATABASE_URL
-_connect_args = {"check_same_thread": False} if _url.startswith("sqlite") else {}
+
+if _url.startswith("sqlite"):
+    _connect_args = {"check_same_thread": False}
+else:
+    _connect_args = {"sslmode": "require"}
 
 engine = create_engine(_url, connect_args=_connect_args)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
