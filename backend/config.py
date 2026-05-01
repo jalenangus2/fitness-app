@@ -5,7 +5,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     ANTHROPIC_API_KEY: str = ""
     WALMART_CLIENT_ID: str = ""
-    WALMART_CLIENT_SECRET: str = ""
+    WALMART_CLIENT_SECRET: str = ""          # raw PEM content (optional)
+    WALMART_PRIVATE_KEY_PATH: str = ""       # path to .pem file (preferred)
     WALMART_API_BASE_URL: str = "https://developer.api.walmart.com/api-proxy/service/affil/product/v2"
     SECRET_KEY: str = "changethissecretkeyinproduction"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 10080

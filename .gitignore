@@ -18,3 +18,5 @@ frontend/.env
 .env
 *.log
 .claude
+.ssh
+lifestyle.db
