@@ -65,9 +65,13 @@ export default function WorkoutPage() {
     const lines = importText.split('\n').filter(l => l.trim())
     const parsed: Partial<WorkoutExercise>[] = []
     for (const line of lines) {
-      const m = line.match(/^(.+?)[\s\-:]+(\d+)\s*[x×]\s*(\d+)/i)
-      if (m) {
-        parsed.push({ name: m[1].trim(), sets: Number(m[2]), reps: m[3] })
+      // Format: "Exercise Name (sets)x(reps) - (weight)" or without weight
+      const withWeight = line.match(/^(.+?)\s+(\d+)\s*[x×]\s*(\d+)\s*[-–]\s*([\d.]+)/i)
+      const noWeight = line.match(/^(.+?)\s+(\d+)\s*[x×]\s*(\d+)/i)
+      if (withWeight) {
+        parsed.push({ name: withWeight[1].trim(), sets: Number(withWeight[2]), reps: withWeight[3], weight_lbs: Number(withWeight[4]) })
+      } else if (noWeight) {
+        parsed.push({ name: noWeight[1].trim(), sets: Number(noWeight[2]), reps: noWeight[3] })
       } else if (line.trim() && !/^\d/.test(line.trim())) {
         parsed.push({ name: line.trim(), sets: 3, reps: '10' })
       }
@@ -76,7 +80,7 @@ export default function WorkoutPage() {
       setManualExercises(parsed)
       toast(`Imported ${parsed.length} exercise${parsed.length !== 1 ? 's' : ''}`, 'success')
     } else {
-      toast('No exercises found — try "Bench Press 3x10" format', 'error')
+      toast('No exercises found — try "Bench Press 3x10 - 135" format', 'error')
     }
     setShowImport(false)
     setImportText('')
@@ -299,11 +303,15 @@ export default function WorkoutPage() {
                 <button onClick={() => setManualExercises([...manualExercises, { name: '', sets: 3, reps: '10' }])} className="text-indigo-400 text-xs flex items-center gap-1"><Plus size={12} /> Add</button>
               </div>
             </h4>
+            <div className="grid grid-cols-[1fr_52px_52px_72px_32px] gap-2 text-xs text-slate-500 px-1">
+              <span>Exercise</span><span>Sets</span><span>Reps</span><span>Wt (lbs)</span><span />
+            </div>
             {manualExercises.map((ex, i) => (
-              <div key={i} className="flex gap-2 items-center bg-slate-800 p-2 rounded">
-                <Input value={ex.name || ''} onChange={e => { const nm = [...manualExercises]; nm[i].name = e.target.value; setManualExercises(nm) }} placeholder="Exercise name" className="flex-1" />
-                <Input type="number" value={ex.sets || ''} onChange={e => { const nm = [...manualExercises]; nm[i].sets = Number(e.target.value); setManualExercises(nm) }} placeholder="Sets" className="w-16" />
-                <Input value={ex.reps || ''} onChange={e => { const nm = [...manualExercises]; nm[i].reps = e.target.value; setManualExercises(nm) }} placeholder="Reps" className="w-16" />
+              <div key={i} className="grid grid-cols-[1fr_52px_52px_72px_32px] gap-2 items-center bg-slate-800 p-2 rounded">
+                <Input value={ex.name || ''} onChange={e => { const nm = [...manualExercises]; nm[i].name = e.target.value; setManualExercises(nm) }} placeholder="e.g. Bench Press" />
+                <Input type="number" value={ex.sets || ''} onChange={e => { const nm = [...manualExercises]; nm[i].sets = Number(e.target.value); setManualExercises(nm) }} placeholder="3" />
+                <Input value={ex.reps || ''} onChange={e => { const nm = [...manualExercises]; nm[i].reps = e.target.value; setManualExercises(nm) }} placeholder="10" />
+                <Input type="number" value={ex.weight_lbs ?? ''} onChange={e => { const nm = [...manualExercises]; nm[i].weight_lbs = e.target.value ? Number(e.target.value) : undefined; setManualExercises(nm) }} placeholder="0" />
                 <button onClick={() => setManualExercises(manualExercises.filter((_, idx) => idx !== i))} className="p-2 text-red-400"><X size={16} /></button>
               </div>
             ))}
@@ -318,10 +326,10 @@ export default function WorkoutPage() {
       {/* Import from notes modal */}
       <Modal isOpen={showImport} onClose={() => setShowImport(false)} title="Paste Workout from Notes" size="lg">
         <div className="space-y-3">
-          <p className="text-xs text-slate-400">Paste your workout. Works with formats like:<br /><span className="text-slate-300 font-mono">Bench Press 4x8 · Squat: 3 x 10 · Pull-ups</span></p>
+          <p className="text-xs text-slate-400">One exercise per line. Weight is optional:<br /><span className="text-slate-300 font-mono">Bench Press 4x8 - 135</span><br /><span className="text-slate-500 font-mono">Squat 3x10 - 225 · Pull-ups 3x8</span></p>
           <textarea
             className="w-full h-48 bg-slate-800 border border-slate-600 text-slate-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none font-mono"
-            placeholder={"Bench Press 4x8\nSquat 3x10\nDeadlift: 3 x 5\nPull-ups 3x8"}
+            placeholder={"Bench Press 4x8 - 135\nIncline DB Press 3x10 - 70\nTricep Pushdown 3x15 - 50\nCable Fly 3x12 - 40"}
             value={importText}
             onChange={e => setImportText(e.target.value)}
           />
@@ -510,7 +518,7 @@ function SessionCard({ session, expanded, onToggle, onDelete }: { session: Worko
 function ActiveExerciseCard({ exercise, onLogSet }: { exercise: WorkoutExercise; onLogSet: (set: number, reps: number, weight: number) => void }) {
   const [currentSet, setCurrentSet] = useState(1)
   const [reps, setReps] = useState(Number(exercise.reps) || 10)
-  const [weight, setWeight] = useState(0)
+  const [weight, setWeight] = useState(exercise.weight_lbs ?? 0)
   const adjust = (setter: any, val: number, amount: number) => setter(Math.max(0, val + amount))
 
   return (

@@ -7,6 +7,7 @@ class WorkoutExerciseBase(BaseModel):
     name: str
     sets: Optional[int] = None
     reps: Optional[str] = None
+    weight_lbs: Optional[float] = None
     rest_seconds: Optional[int] = None
     notes: Optional[str] = None
     order_index: int = 0
