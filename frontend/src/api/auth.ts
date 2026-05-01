@@ -30,3 +30,8 @@ export const getMe = async () => {
   const res = await client.get('/auth/me')
   return res.data
 }
+
+export const updateMe = async (data: { display_name: string | null }) => {
+  const res = await client.patch('/auth/me', data)
+  return res.data
+}

@@ -1,10 +1,12 @@
-import { Dumbbell, UtensilsCrossed, ShoppingCart, Calendar, CheckSquare, Shirt, Sun, CloudSun, Cloud, CloudRain, CloudSnow, CloudLightning, Wind, MapPin } from 'lucide-react'
+import { useState, useRef, useEffect } from 'react'
+import { Dumbbell, UtensilsCrossed, ShoppingCart, Calendar, CheckSquare, Shirt, Sun, CloudSun, Cloud, CloudRain, CloudSnow, CloudLightning, Wind, MapPin, Pencil, Check, X } from 'lucide-react'
 import { useDashboard, useWeather } from '../hooks/useDashboard'
 import Card from '../components/ui/Card'
 import Badge from '../components/ui/Badge'
 import Spinner from '../components/ui/Spinner'
 import { formatDate, daysUntil } from '../utils/date'
 import { useAuthStore } from '../store/authStore'
+import { updateMe } from '../api/auth'
 
 function weatherIcon(code: number) {
   if (code === 0) return <Sun size={36} className="text-yellow-400" />
@@ -76,7 +78,28 @@ function MacroBar({ label, value, target, color }: { label: string; value: numbe
 
 export default function DashboardPage() {
   const { data, isLoading } = useDashboard()
-  const user = useAuthStore((s) => s.user)
+  const { user, updateUser } = useAuthStore()
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState('')
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    if (editing) {
+      setDraft(user?.display_name ?? '')
+      inputRef.current?.focus()
+    }
+  }, [editing])
+
+  const saveDisplayName = async () => {
+    const trimmed = draft.trim()
+    try {
+      const updated = await updateMe({ display_name: trimmed || null })
+      updateUser({ display_name: updated.display_name })
+    } catch {}
+    setEditing(false)
+  }
+
+  const displayName = user?.display_name || user?.username
 
   if (isLoading) return (
     <div className="flex items-center justify-center h-64">
@@ -87,8 +110,29 @@ export default function DashboardPage() {
   return (
     <div className="space-y-5 pb-2">
       <div>
-        <h1 className="text-2xl font-bold text-slate-100">
-          Good {getGreeting()}, {user?.username} 👋
+        <h1 className="text-2xl font-bold text-slate-100 flex items-center gap-2 flex-wrap">
+          Good {getGreeting()},{' '}
+          {editing ? (
+            <span className="flex items-center gap-1">
+              <input
+                ref={inputRef}
+                value={draft}
+                onChange={e => setDraft(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') saveDisplayName(); if (e.key === 'Escape') setEditing(false) }}
+                className="bg-slate-700 border border-indigo-500 rounded-lg px-2 py-0.5 text-xl font-bold text-slate-100 focus:outline-none w-40"
+                placeholder={user?.username}
+              />
+              <button onClick={saveDisplayName} className="text-emerald-400 hover:text-emerald-300 p-1"><Check size={18} /></button>
+              <button onClick={() => setEditing(false)} className="text-slate-500 hover:text-slate-300 p-1"><X size={18} /></button>
+            </span>
+          ) : (
+            <span className="flex items-center gap-1.5">
+              {displayName} 👋
+              <button onClick={() => setEditing(true)} className="text-slate-500 hover:text-slate-300 transition-colors" title="Edit display name">
+                <Pencil size={14} />
+              </button>
+            </span>
+          )}
         </h1>
         <p className="text-slate-400 mt-1">Here's your life at a glance.</p>
       </div>
