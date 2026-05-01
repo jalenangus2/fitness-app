@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { format, parseISO } from 'date-fns'
 import { Plus, Zap, CheckCircle, Trash2, ChevronDown, Play, Timer, X, Minus, BarChart2, Dumbbell, ClipboardList } from 'lucide-react'
 import {
-  useWorkouts, useGenerateWorkout, useCreateWorkout, useActivateWorkout,
+  useWorkouts, useCreateWorkout, useActivateWorkout,
   useDeleteWorkout, useStartSession, useLogSet, useFinishSession,
   useWorkoutSessions, useDeleteSession,
 } from '../hooks/useWorkout'
@@ -17,16 +17,15 @@ import type { WorkoutPlan, WorkoutExercise, WorkoutSession } from '../types'
 
 const MUSCLE_GROUPS = ['Chest', 'Back', 'Shoulders', 'Biceps', 'Triceps', 'Legs', 'Core', 'Full Body']
 
-type LogExercise = { name: string; sets: { reps: number; weight: number }[] }
+type LogExercise = { name: string; sets: number; reps: number; weight: number }
 
-const defaultLogExercise = (): LogExercise => ({ name: '', sets: [{ reps: 10, weight: 0 }] })
+const defaultLogExercise = (): LogExercise => ({ name: '', sets: 3, reps: 10, weight: 0 })
 
 export default function WorkoutPage() {
   const { data: plans = [], isLoading } = useWorkouts()
   const { data: sessions = [] } = useWorkoutSessions()
   const { toast } = useToast()
 
-  const generate = useGenerateWorkout()
   const createManual = useCreateWorkout()
   const activate = useActivateWorkout()
   const remove = useDeleteWorkout()
@@ -38,7 +37,8 @@ export default function WorkoutPage() {
   const [activeTab, setActiveTab] = useState<'plans' | 'history'>('plans')
   const [showModal, setShowModal] = useState(false)
   const [showLogModal, setShowLogModal] = useState(false)
-  const [createMode, setCreateMode] = useState<'ai' | 'manual'>('ai')
+  const [showImport, setShowImport] = useState(false)
+  const [importText, setImportText] = useState('')
   const [expandedId, setExpandedId] = useState<number | null>(null)
   const [expandedSessionId, setExpandedSessionId] = useState<number | null>(null)
 
@@ -61,16 +61,32 @@ export default function WorkoutPage() {
   const toggleMuscle = (m: string) =>
     setForm(f => ({ ...f, muscle_groups: f.muscle_groups.includes(m) ? f.muscle_groups.filter(x => x !== m) : [...f.muscle_groups, m] }))
 
-  const handleCreate = async () => {
-    try {
-      if (createMode === 'ai') {
-        await generate.mutateAsync({ ...form, muscle_groups: form.muscle_groups.map(m => m.toLowerCase()) })
-        toast('AI Plan generated!', 'success')
-      } else {
-        if (!form.name) return toast('Name is required', 'error')
-        await createManual.mutateAsync({ ...form, exercises: manualExercises as any } as any)
-        toast('Manual plan created!', 'success')
+  const parseImportText = () => {
+    const lines = importText.split('\n').filter(l => l.trim())
+    const parsed: Partial<WorkoutExercise>[] = []
+    for (const line of lines) {
+      const m = line.match(/^(.+?)[\s\-:]+(\d+)\s*[x×]\s*(\d+)/i)
+      if (m) {
+        parsed.push({ name: m[1].trim(), sets: Number(m[2]), reps: m[3] })
+      } else if (line.trim() && !/^\d/.test(line.trim())) {
+        parsed.push({ name: line.trim(), sets: 3, reps: '10' })
       }
+    }
+    if (parsed.length > 0) {
+      setManualExercises(parsed)
+      toast(`Imported ${parsed.length} exercise${parsed.length !== 1 ? 's' : ''}`, 'success')
+    } else {
+      toast('No exercises found — try "Bench Press 3x10" format', 'error')
+    }
+    setShowImport(false)
+    setImportText('')
+  }
+
+  const handleCreate = async () => {
+    if (!form.name) return toast('Name is required', 'error')
+    try {
+      await createManual.mutateAsync({ ...form, exercises: manualExercises as any } as any)
+      toast('Plan created!', 'success')
       setShowModal(false)
     } catch {
       toast('Failed to save plan. Please try again.', 'error')
@@ -110,11 +126,11 @@ export default function WorkoutPage() {
     if (validExercises.length === 0) return toast('Add at least one exercise', 'error')
 
     const set_logs = validExercises.flatMap(ex =>
-      ex.sets.map((s, si) => ({
+      Array.from({ length: ex.sets }, (_, i) => ({
         exercise_name: ex.name.trim(),
-        set_number: si + 1,
-        reps: s.reps,
-        weight_lbs: s.weight,
+        set_number: i + 1,
+        reps: ex.reps,
+        weight_lbs: ex.weight,
       }))
     )
 
@@ -136,22 +152,9 @@ export default function WorkoutPage() {
     }
   }
 
-  const updateLogExercise = (i: number, field: string, value: string) => {
+  const updateLogExercise = (i: number, field: keyof LogExercise, value: string | number) => {
     setLogExercises(prev => prev.map((ex, idx) => idx === i ? { ...ex, [field]: value } : ex))
   }
-
-  const updateLogSet = (exIdx: number, setIdx: number, field: string, value: number) => {
-    setLogExercises(prev => prev.map((ex, i) => i !== exIdx ? ex : {
-      ...ex,
-      sets: ex.sets.map((s, si) => si !== setIdx ? s : { ...s, [field]: value }),
-    }))
-  }
-
-  const addSetToExercise = (exIdx: number) =>
-    setLogExercises(prev => prev.map((ex, i) => i !== exIdx ? ex : { ...ex, sets: [...ex.sets, { reps: 10, weight: 0 }] }))
-
-  const removeSetFromExercise = (exIdx: number, setIdx: number) =>
-    setLogExercises(prev => prev.map((ex, i) => i !== exIdx ? ex : { ...ex, sets: ex.sets.filter((_, si) => si !== setIdx) }))
 
   // Stats
   const totalSessions = sessions.length
@@ -278,14 +281,8 @@ export default function WorkoutPage() {
 
       {/* Create plan modal */}
       <Modal isOpen={showModal} onClose={() => setShowModal(false)} title="Create Workout Plan" size="lg">
-        <div className="flex bg-slate-800 p-1 rounded-lg mb-4">
-          <button onClick={() => setCreateMode('ai')} className={`flex-1 py-2 text-sm rounded-md transition ${createMode === 'ai' ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}>AI Generate</button>
-          <button onClick={() => setCreateMode('manual')} className={`flex-1 py-2 text-sm rounded-md transition ${createMode === 'manual' ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}>Build Manual</button>
-        </div>
         <div className="space-y-4">
-          {createMode === 'manual' && (
-            <Input label="Plan Name" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="e.g. Push Day" />
-          )}
+          <Input label="Plan Name" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="e.g. Push Day" />
           <div>
             <p className="text-sm font-medium text-slate-300 mb-2">Target Muscles</p>
             <div className="flex flex-wrap gap-2">
@@ -294,25 +291,44 @@ export default function WorkoutPage() {
               ))}
             </div>
           </div>
-          {createMode === 'manual' && (
-            <div className="space-y-3 pt-4 border-t border-slate-700">
-              <h4 className="text-sm text-slate-300 font-medium flex justify-between">
-                Exercises
+          <div className="space-y-3 pt-4 border-t border-slate-700">
+            <h4 className="text-sm text-slate-300 font-medium flex justify-between items-center">
+              Exercises
+              <div className="flex gap-3">
+                <button onClick={() => setShowImport(true)} className="text-slate-400 text-xs flex items-center gap-1 hover:text-slate-200">Paste from Notes</button>
                 <button onClick={() => setManualExercises([...manualExercises, { name: '', sets: 3, reps: '10' }])} className="text-indigo-400 text-xs flex items-center gap-1"><Plus size={12} /> Add</button>
-              </h4>
-              {manualExercises.map((ex, i) => (
-                <div key={i} className="flex gap-2 items-center bg-slate-800 p-2 rounded">
-                  <Input value={ex.name || ''} onChange={e => { const nm = [...manualExercises]; nm[i].name = e.target.value; setManualExercises(nm) }} placeholder="Exercise name" className="flex-1" />
-                  <Input type="number" value={ex.sets || ''} onChange={e => { const nm = [...manualExercises]; nm[i].sets = Number(e.target.value); setManualExercises(nm) }} placeholder="Sets" className="w-16" />
-                  <button onClick={() => setManualExercises(manualExercises.filter((_, idx) => idx !== i))} className="p-2 text-red-400"><X size={16} /></button>
-                </div>
-              ))}
-            </div>
-          )}
+              </div>
+            </h4>
+            {manualExercises.map((ex, i) => (
+              <div key={i} className="flex gap-2 items-center bg-slate-800 p-2 rounded">
+                <Input value={ex.name || ''} onChange={e => { const nm = [...manualExercises]; nm[i].name = e.target.value; setManualExercises(nm) }} placeholder="Exercise name" className="flex-1" />
+                <Input type="number" value={ex.sets || ''} onChange={e => { const nm = [...manualExercises]; nm[i].sets = Number(e.target.value); setManualExercises(nm) }} placeholder="Sets" className="w-16" />
+                <Input value={ex.reps || ''} onChange={e => { const nm = [...manualExercises]; nm[i].reps = e.target.value; setManualExercises(nm) }} placeholder="Reps" className="w-16" />
+                <button onClick={() => setManualExercises(manualExercises.filter((_, idx) => idx !== i))} className="p-2 text-red-400"><X size={16} /></button>
+              </div>
+            ))}
+          </div>
         </div>
         <div className="flex gap-3 pt-4 mt-4 border-t border-slate-700">
           <Button variant="secondary" onClick={() => setShowModal(false)} className="flex-1">Cancel</Button>
-          <Button onClick={handleCreate} className="flex-1">{createMode === 'ai' ? <><Zap size={16} /> Generate</> : 'Save Plan'}</Button>
+          <Button onClick={handleCreate} className="flex-1">Save Plan</Button>
+        </div>
+      </Modal>
+
+      {/* Import from notes modal */}
+      <Modal isOpen={showImport} onClose={() => setShowImport(false)} title="Paste Workout from Notes" size="lg">
+        <div className="space-y-3">
+          <p className="text-xs text-slate-400">Paste your workout. Works with formats like:<br /><span className="text-slate-300 font-mono">Bench Press 4x8 · Squat: 3 x 10 · Pull-ups</span></p>
+          <textarea
+            className="w-full h-48 bg-slate-800 border border-slate-600 text-slate-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none font-mono"
+            placeholder={"Bench Press 4x8\nSquat 3x10\nDeadlift: 3 x 5\nPull-ups 3x8"}
+            value={importText}
+            onChange={e => setImportText(e.target.value)}
+          />
+        </div>
+        <div className="flex gap-3 pt-4 mt-4 border-t border-slate-700">
+          <Button variant="secondary" onClick={() => setShowImport(false)} className="flex-1">Cancel</Button>
+          <Button onClick={parseImportText} className="flex-1">Import Exercises</Button>
         </div>
       </Modal>
 
@@ -339,7 +355,7 @@ export default function WorkoutPage() {
           </div>
 
           {/* Exercises */}
-          <div className="space-y-4 pt-2 border-t border-slate-700">
+          <div className="space-y-3 pt-2 border-t border-slate-700">
             <div className="flex justify-between items-center">
               <p className="text-sm font-semibold text-slate-300">Exercises</p>
               <button onClick={() => setLogExercises(prev => [...prev, defaultLogExercise()])}
@@ -348,8 +364,12 @@ export default function WorkoutPage() {
               </button>
             </div>
 
+            <div className="grid grid-cols-3 gap-2 text-xs text-slate-500 px-1">
+              <span>Sets</span><span>Reps</span><span>Weight (lbs)</span>
+            </div>
+
             {logExercises.map((ex, exIdx) => (
-              <div key={exIdx} className="bg-slate-800/60 rounded-xl p-3 space-y-3">
+              <div key={exIdx} className="bg-slate-800/60 rounded-xl p-3 space-y-2">
                 <div className="flex gap-2 items-center">
                   <Input
                     value={ex.name}
@@ -364,39 +384,17 @@ export default function WorkoutPage() {
                     </button>
                   )}
                 </div>
-
-                {/* Sets header */}
-                <div className="grid grid-cols-3 gap-2 text-xs text-slate-500 px-1">
-                  <span>Set</span><span>Weight (lbs)</span><span>Reps</span>
+                <div className="grid grid-cols-3 gap-2">
+                  <input type="number" min="1" value={ex.sets}
+                    onChange={e => updateLogExercise(exIdx, 'sets', Number(e.target.value))}
+                    className="bg-slate-700 border border-slate-600 text-slate-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                  <input type="number" min="1" value={ex.reps}
+                    onChange={e => updateLogExercise(exIdx, 'reps', Number(e.target.value))}
+                    className="bg-slate-700 border border-slate-600 text-slate-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                  <input type="number" min="0" value={ex.weight}
+                    onChange={e => updateLogExercise(exIdx, 'weight', Number(e.target.value))}
+                    className="bg-slate-700 border border-slate-600 text-slate-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
                 </div>
-
-                {ex.sets.map((s, setIdx) => (
-                  <div key={setIdx} className="grid grid-cols-3 gap-2 items-center">
-                    <span className="text-sm text-slate-400 pl-1">#{setIdx + 1}</span>
-                    <input
-                      type="number" min="0" value={s.weight}
-                      onChange={e => updateLogSet(exIdx, setIdx, 'weight', Number(e.target.value))}
-                      className="bg-slate-700 border border-slate-600 text-slate-100 rounded-lg px-3 py-2 text-sm w-full focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                    />
-                    <div className="flex gap-1 items-center">
-                      <input
-                        type="number" min="0" value={s.reps}
-                        onChange={e => updateLogSet(exIdx, setIdx, 'reps', Number(e.target.value))}
-                        className="bg-slate-700 border border-slate-600 text-slate-100 rounded-lg px-3 py-2 text-sm flex-1 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                      />
-                      {ex.sets.length > 1 && (
-                        <button onClick={() => removeSetFromExercise(exIdx, setIdx)} className="text-slate-500 hover:text-red-400 p-1">
-                          <X size={14} />
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                ))}
-
-                <button onClick={() => addSetToExercise(exIdx)}
-                  className="text-xs text-indigo-400 hover:text-indigo-300 flex items-center gap-1 pl-1">
-                  <Plus size={11} /> Add Set
-                </button>
               </div>
             ))}
           </div>
@@ -524,18 +522,26 @@ function ActiveExerciseCard({ exercise, onLogSet }: { exercise: WorkoutExercise;
       <div className="grid grid-cols-2 gap-4 mb-6">
         <div className="bg-slate-900 rounded-lg p-2 text-center">
           <p className="text-xs text-slate-400 mb-2 uppercase tracking-wider">Weight (lbs)</p>
-          <div className="flex items-center justify-between">
-            <button onClick={() => adjust(setWeight, weight, -5)} className="bg-slate-700 p-3 rounded-md active:bg-slate-600"><Minus size={16} /></button>
-            <span className="text-2xl font-bold">{weight}</span>
-            <button onClick={() => adjust(setWeight, weight, 5)} className="bg-slate-700 p-3 rounded-md active:bg-slate-600"><Plus size={16} /></button>
+          <div className="flex items-center justify-between gap-2">
+            <button onClick={() => adjust(setWeight, weight, -5)} className="bg-slate-700 p-3 rounded-md active:bg-slate-600 flex-shrink-0"><Minus size={16} /></button>
+            <input
+              type="number" min="0" value={weight}
+              onChange={e => setWeight(Math.max(0, Number(e.target.value)))}
+              className="text-2xl font-bold w-full text-center bg-transparent focus:outline-none focus:bg-slate-800 rounded-md px-1"
+            />
+            <button onClick={() => adjust(setWeight, weight, 5)} className="bg-slate-700 p-3 rounded-md active:bg-slate-600 flex-shrink-0"><Plus size={16} /></button>
           </div>
         </div>
         <div className="bg-slate-900 rounded-lg p-2 text-center">
           <p className="text-xs text-slate-400 mb-2 uppercase tracking-wider">Reps</p>
-          <div className="flex items-center justify-between">
-            <button onClick={() => adjust(setReps, reps, -1)} className="bg-slate-700 p-3 rounded-md active:bg-slate-600"><Minus size={16} /></button>
-            <span className="text-2xl font-bold">{reps}</span>
-            <button onClick={() => adjust(setReps, reps, 1)} className="bg-slate-700 p-3 rounded-md active:bg-slate-600"><Plus size={16} /></button>
+          <div className="flex items-center justify-between gap-2">
+            <button onClick={() => adjust(setReps, reps, -1)} className="bg-slate-700 p-3 rounded-md active:bg-slate-600 flex-shrink-0"><Minus size={16} /></button>
+            <input
+              type="number" min="0" value={reps}
+              onChange={e => setReps(Math.max(0, Number(e.target.value)))}
+              className="text-2xl font-bold w-full text-center bg-transparent focus:outline-none focus:bg-slate-800 rounded-md px-1"
+            />
+            <button onClick={() => adjust(setReps, reps, 1)} className="bg-slate-700 p-3 rounded-md active:bg-slate-600 flex-shrink-0"><Plus size={16} /></button>
           </div>
         </div>
       </div>

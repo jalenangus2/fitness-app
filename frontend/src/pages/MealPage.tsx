@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react'
 import { Plus, Zap, CheckCircle, Trash2, ChevronDown, ShoppingCart, Search } from 'lucide-react'
-import { useMealPlans, useGenerateMealPlan, useCreateMealPlan, useActivateMealPlan, useDeleteMealPlan, useDailyNutrition, useLogNutrition, useSearchFoods } from '../hooks/useMeal'
+import { useMealPlans, useCreateMealPlan, useActivateMealPlan, useDeleteMealPlan, useDailyNutrition, useLogNutrition, useSearchFoods } from '../hooks/useMeal'
 import { useCreateShoppingList } from '../hooks/useShopping'
 import { useToast } from '../components/ui/Toast'
 import Card from '../components/ui/Card'
@@ -12,13 +12,11 @@ import Input from '../components/ui/Input'
 import Spinner from '../components/ui/Spinner'
 
 const GOAL_OPTIONS = [{ value: 'weight_loss', label: 'Weight Loss' }, { value: 'muscle_gain', label: 'Muscle Gain' }, { value: 'maintenance', label: 'Maintenance' }, { value: 'keto', label: 'Keto' }, { value: 'vegan', label: 'Vegan' }]
-const RESTRICTION_OPTIONS = ['Vegetarian', 'Vegan', 'Gluten-Free', 'Dairy-Free', 'Nut-Free', 'Halal', 'Kosher']
 const GOAL_COLORS: Record<string, 'green' | 'blue' | 'yellow' | 'red' | 'indigo' | 'slate'> = { weight_loss: 'blue', muscle_gain: 'green', maintenance: 'slate', keto: 'yellow', vegan: 'green' }
 
 export default function MealPage() {
   const { data: plans = [], isLoading } = useMealPlans()
   const { data: logs = [] } = useDailyNutrition()
-  const generate = useGenerateMealPlan()
   const createManual = useCreateMealPlan()
   const activate = useActivateMealPlan()
   const remove = useDeleteMealPlan()
@@ -29,12 +27,11 @@ export default function MealPage() {
   // UI State
   const [showPlanModal, setShowPlanModal] = useState(false)
   const [showLogModal, setShowLogModal] = useState(false)
-  const [createMode, setCreateMode] = useState<'ai' | 'manual'>('ai')
   const [expandedId, setExpandedId] = useState<number | null>(null)
   const [expandedDay, setExpandedDay] = useState<number>(1)
 
   // Forms
-  const [form, setForm] = useState({ name: '', goal: 'muscle_gain', target_calories: 2500, target_protein_g: 180, target_carbs_g: 250, target_fat_g: 80, duration_days: 7, dietary_restrictions: [] as string[] })
+  const [form, setForm] = useState({ name: '', goal: 'muscle_gain', target_calories: 2500, target_protein_g: 180, target_carbs_g: 250, target_fat_g: 80, duration_days: 7 })
   const [logForm, setLogForm] = useState({ name: '', calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 })
   const [foodSearch, setFoodSearch] = useState('')
   const { data: foodResults = [] } = useSearchFoods(foodSearch)
@@ -56,19 +53,10 @@ export default function MealPage() {
     fat: acc.fat + log.fat_g
   }), { cals: 0, prot: 0, carb: 0, fat: 0 }), [logs])
 
-  const toggleRestriction = (r: string) => {
-    setForm(f => ({ ...f, dietary_restrictions: f.dietary_restrictions.includes(r) ? f.dietary_restrictions.filter(x => x !== r) : [...f.dietary_restrictions, r] }))
-  }
-
   const handleCreatePlan = async () => {
     try {
-      if (createMode === 'ai') {
-        await generate.mutateAsync({ ...form, dietary_restrictions: form.dietary_restrictions.map(r => r.toLowerCase()) })
-        toast('Meal plan generated!', 'success')
-      } else {
-        await createManual.mutateAsync({ ...form, is_ai_generated: false, meals: [] })
-        toast('Manual plan created. Edit it to add meals.', 'success')
-      }
+      await createManual.mutateAsync({ ...form, is_ai_generated: false, meals: [] })
+      toast('Meal plan created!', 'success')
       setShowPlanModal(false)
     } catch {
       toast('Failed to create plan. Please try again.', 'error')
@@ -172,15 +160,8 @@ export default function MealPage() {
 
       {/* CREATE PLAN MODAL */}
       <Modal isOpen={showPlanModal} onClose={() => setShowPlanModal(false)} title="Create Meal Plan" size="lg">
-        <div className="flex bg-slate-800 p-1 rounded-lg mb-4">
-          <button onClick={() => setCreateMode('ai')} className={`flex-1 py-2 text-sm rounded-md transition ${createMode === 'ai' ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}>AI Generate</button>
-          <button onClick={() => setCreateMode('manual')} className={`flex-1 py-2 text-sm rounded-md transition ${createMode === 'manual' ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}>Build Manual</button>
-        </div>
-        
         <div className="space-y-4 max-h-[60vh] overflow-y-auto px-1">
-          {createMode === 'manual' && (
-             <Input label="Plan Name" value={form.name} onChange={e => setForm({...form, name: e.target.value})} placeholder="e.g. Bulk Week 1" />
-          )}
+          <Input label="Plan Name" value={form.name} onChange={e => setForm({...form, name: e.target.value})} placeholder="e.g. Bulk Week 1" />
           <Select label="Goal" options={GOAL_OPTIONS} value={form.goal} onChange={(e) => setForm({ ...form, goal: e.target.value })} />
           <div className="grid grid-cols-2 gap-4">
             <Input label="Daily Calories" type="number" min={1000} value={form.target_calories} onChange={(e) => setForm({ ...form, target_calories: Number(e.target.value) })} />
@@ -191,20 +172,10 @@ export default function MealPage() {
             <Input label="Carbs (g)" type="number" min={0} value={form.target_carbs_g} onChange={(e) => setForm({ ...form, target_carbs_g: Number(e.target.value) })} />
             <Input label="Fat (g)" type="number" min={0} value={form.target_fat_g} onChange={(e) => setForm({ ...form, target_fat_g: Number(e.target.value) })} />
           </div>
-          {createMode === 'ai' && (
-            <div>
-              <p className="text-sm font-medium text-slate-300 mb-2">Dietary Restrictions</p>
-              <div className="flex flex-wrap gap-2">
-                {RESTRICTION_OPTIONS.map(r => (
-                  <button key={r} onClick={() => toggleRestriction(r)} className={`px-3 py-1.5 rounded-lg text-xs border ${form.dietary_restrictions.includes(r) ? 'bg-indigo-600 border-indigo-500 text-white' : 'bg-slate-700 border-slate-600 text-slate-300'}`}>{r}</button>
-                ))}
-              </div>
-            </div>
-          )}
         </div>
         <div className="flex gap-3 pt-4 mt-4 border-t border-slate-700">
           <Button variant="secondary" onClick={() => setShowPlanModal(false)} className="flex-1">Cancel</Button>
-          <Button onClick={handleCreatePlan} className="flex-1">{createMode === 'ai' ? <><Zap size={16} /> Generate</> : 'Save Plan'}</Button>
+          <Button onClick={handleCreatePlan} className="flex-1">Save Plan</Button>
         </div>
       </Modal>
     </div>
