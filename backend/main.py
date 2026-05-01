@@ -10,20 +10,32 @@ from .routers import auth, workout, meal, shopping, schedule, fashion, dashboard
 import os
 
 def _run_migrations() -> None:
-    """Add columns that were added after initial table creation (SQLite doesn't auto-migrate)."""
+    """Add columns that were added after initial table creation."""
     from sqlalchemy import text
-    stmts = [
-        "ALTER TABLE workout_plans ADD COLUMN is_ai_generated BOOLEAN DEFAULT 0",
-        "ALTER TABLE tasks ADD COLUMN recurrence_rule TEXT",
-        "ALTER TABLE meal_plans ADD COLUMN is_ai_generated BOOLEAN DEFAULT 0",
-    ]
-    with engine.connect() as conn:
-        for sql in stmts:
-            try:
+    is_pg = not str(engine.url).startswith("sqlite")
+    if is_pg:
+        stmts = [
+            "ALTER TABLE workout_plans ADD COLUMN IF NOT EXISTS is_ai_generated BOOLEAN DEFAULT false",
+            "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS recurrence_rule TEXT",
+            "ALTER TABLE meal_plans ADD COLUMN IF NOT EXISTS is_ai_generated BOOLEAN DEFAULT false",
+        ]
+        with engine.connect() as conn:
+            for sql in stmts:
                 conn.execute(text(sql))
-                conn.commit()
-            except Exception:
-                pass  # column already exists
+            conn.commit()
+    else:
+        stmts = [
+            "ALTER TABLE workout_plans ADD COLUMN is_ai_generated BOOLEAN DEFAULT 0",
+            "ALTER TABLE tasks ADD COLUMN recurrence_rule TEXT",
+            "ALTER TABLE meal_plans ADD COLUMN is_ai_generated BOOLEAN DEFAULT 0",
+        ]
+        with engine.connect() as conn:
+            for sql in stmts:
+                try:
+                    conn.execute(text(sql))
+                    conn.commit()
+                except Exception:
+                    pass  # column already exists
 
 
 @asynccontextmanager
