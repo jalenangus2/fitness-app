@@ -17,3 +17,6 @@ frontend/.env
 .DS_Store
 .env
 *.log
+.claude
+.ssh
+lifestyle.db

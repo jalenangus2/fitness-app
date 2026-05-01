@@ -6,18 +6,8 @@ export const getWorkouts = async (): Promise<WorkoutPlan[]> => {
   return res.data
 }
 
-export const getWorkout = async (id: number): Promise<WorkoutPlan> => {
-  const res = await client.get(`/workouts/${id}`)
-  return res.data
-}
-
 export const createWorkout = async (data: Partial<WorkoutPlan>): Promise<WorkoutPlan> => {
   const res = await client.post('/workouts', data)
-  return res.data
-}
-
-export const updateWorkout = async (id: number, data: Partial<WorkoutPlan>): Promise<WorkoutPlan> => {
-  const res = await client.put(`/workouts/${id}`, data)
   return res.data
 }
 

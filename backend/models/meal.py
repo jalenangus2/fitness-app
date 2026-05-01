@@ -3,7 +3,6 @@ from sqlalchemy import Integer, String, Text, Boolean, DateTime, Float, ForeignK
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from ..database import Base
 
-
 class MealPlan(Base):
     __tablename__ = "meal_plans"
 
@@ -17,13 +16,13 @@ class MealPlan(Base):
     target_fat_g: Mapped[int] = mapped_column(Integer, nullable=True)
     duration_days: Mapped[int] = mapped_column(Integer, default=7)
     is_active: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_ai_generated: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     user = relationship("User", back_populates="meal_plans")
     meals = relationship("Meal", back_populates="plan", cascade="all, delete-orphan")
     shopping_lists = relationship("ShoppingList", back_populates="meal_plan")
-
 
 class Meal(Base):
     __tablename__ = "meals"
@@ -42,7 +41,6 @@ class Meal(Base):
     plan = relationship("MealPlan", back_populates="meals")
     items = relationship("MealItem", back_populates="meal", cascade="all, delete-orphan")
 
-
 class MealItem(Base):
     __tablename__ = "meal_items"
 
@@ -53,3 +51,26 @@ class MealItem(Base):
     category: Mapped[str] = mapped_column(Text, nullable=True)
 
     meal = relationship("Meal", back_populates="items")
+
+class FoodItem(Base):
+    __tablename__ = "food_items"
+    
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String, nullable=False, unique=True)
+    calories: Mapped[int] = mapped_column(Integer, nullable=False)
+    protein_g: Mapped[float] = mapped_column(Float, nullable=False)
+    carbs_g: Mapped[float] = mapped_column(Float, nullable=False)
+    fat_g: Mapped[float] = mapped_column(Float, nullable=False)
+    serving_size: Mapped[str] = mapped_column(String, nullable=True)
+
+class NutritionLog(Base):
+    __tablename__ = "nutrition_logs"
+    
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False)
+    name: Mapped[str] = mapped_column(String, nullable=False)
+    calories: Mapped[int] = mapped_column(Integer, nullable=False)
+    protein_g: Mapped[float] = mapped_column(Float, nullable=False)
+    carbs_g: Mapped[float] = mapped_column(Float, nullable=False)
+    fat_g: Mapped[float] = mapped_column(Float, nullable=False)
+    consumed_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

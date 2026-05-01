@@ -2,8 +2,9 @@
 from datetime import datetime, date, timedelta
 from typing import Optional
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from ..database import get_db
@@ -14,8 +15,29 @@ from ..models.shopping import ShoppingList
 from ..models.workout import WorkoutPlan
 from ..models.user import User
 from ..routers.auth import get_current_user
+from ..services.weather_service import get_daily_weather
 
 router = APIRouter()
+
+
+class WeatherResponse(BaseModel):
+    current_temp_f: float
+    temp_high_f: float
+    temp_low_f: float
+    weather_code: int
+    condition: str
+    location: str
+
+
+@router.get("/weather", response_model=WeatherResponse)
+async def get_weather(current_user: User = Depends(get_current_user)):
+    try:
+        return await get_daily_weather()
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Weather service unavailable.",
+        )
 
 
 class ActiveWorkoutSummary(BaseModel):
@@ -103,7 +125,7 @@ def get_summary(
     # Active workout plan
     active_workout = db.query(WorkoutPlan).filter(
         WorkoutPlan.user_id == current_user.id,
-        WorkoutPlan.is_active == True,
+        WorkoutPlan.is_active.is_(True),
     ).first()
 
     active_workout_summary = None
@@ -121,7 +143,7 @@ def get_summary(
     # Active meal plan + today's meals
     active_meal = db.query(MealPlan).filter(
         MealPlan.user_id == current_user.id,
-        MealPlan.is_active == True,
+        MealPlan.is_active.is_(True),
     ).first()
 
     active_meal_summary = None
@@ -167,12 +189,11 @@ def get_summary(
                 fat_g=sum(m.fat_g or 0 for m in today_meals),
             )
 
-    # Today's tasks (due today or overdue and not completed)
+    # All incomplete tasks, sorted by due date (overdue first, then upcoming, then no date)
     today_tasks_db = db.query(Task).filter(
         Task.user_id == current_user.id,
-        Task.due_date <= today,
-        Task.is_completed == False,
-    ).order_by(Task.due_date.asc(), Task.priority.desc()).limit(10).all()
+        Task.is_completed.is_(False),
+    ).order_by(Task.due_date.asc().nullslast(), Task.priority.desc()).limit(10).all()
 
     today_tasks = [
         TaskSummary(

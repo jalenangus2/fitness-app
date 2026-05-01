@@ -15,6 +15,7 @@ class WorkoutPlan(Base):
     duration_mins: Mapped[int] = mapped_column(Integer, nullable=True)
     notes: Mapped[str] = mapped_column(Text, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_ai_generated: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

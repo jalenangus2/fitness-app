@@ -47,7 +47,7 @@ def _serialize_list(shopping_list: ShoppingList) -> ShoppingListResponse:
     )
 
 
-@router.get("/", response_model=list[ShoppingListResponse])
+@router.get("", response_model=list[ShoppingListResponse])
 def list_shopping_lists(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -56,7 +56,7 @@ def list_shopping_lists(
     return [_serialize_list(sl) for sl in lists]
 
 
-@router.post("/", response_model=ShoppingListResponse, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=ShoppingListResponse, status_code=status.HTTP_201_CREATED)
 def create_shopping_list(
     data: ShoppingListCreate,
     current_user: User = Depends(get_current_user),

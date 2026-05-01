@@ -1,10 +1,63 @@
-import { Dumbbell, UtensilsCrossed, ShoppingCart, Calendar, CheckSquare, Shirt } from 'lucide-react'
-import { useDashboard } from '../hooks/useDashboard'
+import { Dumbbell, UtensilsCrossed, ShoppingCart, Calendar, CheckSquare, Shirt, Sun, CloudSun, Cloud, CloudRain, CloudSnow, CloudLightning, Wind, MapPin } from 'lucide-react'
+import { useDashboard, useWeather } from '../hooks/useDashboard'
 import Card from '../components/ui/Card'
 import Badge from '../components/ui/Badge'
 import Spinner from '../components/ui/Spinner'
 import { formatDate, daysUntil } from '../utils/date'
 import { useAuthStore } from '../store/authStore'
+
+function weatherIcon(code: number) {
+  if (code === 0) return <Sun size={36} className="text-yellow-400" />
+  if (code <= 2) return <CloudSun size={36} className="text-yellow-300" />
+  if (code === 3) return <Cloud size={36} className="text-slate-400" />
+  if (code <= 48) return <Wind size={36} className="text-slate-400" />
+  if (code <= 67) return <CloudRain size={36} className="text-blue-400" />
+  if (code <= 77) return <CloudSnow size={36} className="text-sky-300" />
+  if (code <= 82) return <CloudRain size={36} className="text-blue-500" />
+  if (code <= 86) return <CloudSnow size={36} className="text-sky-400" />
+  return <CloudLightning size={36} className="text-yellow-500" />
+}
+
+function WeatherCard() {
+  const { data, isLoading, isError } = useWeather()
+
+  if (isLoading) return (
+    <Card className="flex items-center gap-3 py-4">
+      <Spinner size="sm" />
+      <span className="text-slate-400 text-sm">Loading weather…</span>
+    </Card>
+  )
+
+  if (isError || !data) return (
+    <Card className="flex items-center gap-3 py-3">
+      <Cloud size={24} className="text-slate-600 flex-shrink-0" />
+      <div>
+        <p className="text-sm text-slate-400">Weather unavailable</p>
+        <p className="text-xs text-slate-500 flex items-center gap-1"><MapPin size={10} />Greensboro, NC</p>
+      </div>
+    </Card>
+  )
+
+  return (
+    <Card className="flex items-center justify-between">
+      <div className="flex items-center gap-4">
+        {weatherIcon(data.weather_code)}
+        <div>
+          <p className="text-3xl font-bold text-slate-100">{Math.round(data.current_temp_f)}°F</p>
+          <p className="text-slate-400 text-sm">{data.condition}</p>
+        </div>
+      </div>
+      <div className="text-right">
+        <p className="text-slate-300 text-sm font-medium">
+          H:{Math.round(data.temp_high_f)}° / L:{Math.round(data.temp_low_f)}°
+        </p>
+        <p className="text-slate-500 text-xs flex items-center justify-end gap-1 mt-0.5">
+          <MapPin size={10} />{data.location}
+        </p>
+      </div>
+    </Card>
+  )
+}
 
 function MacroBar({ label, value, target, color }: { label: string; value: number; target: number | null; color: string }) {
   const pct = target ? Math.min((value / target) * 100, 100) : 0
@@ -32,7 +85,7 @@ export default function DashboardPage() {
   )
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-5 pb-2">
       <div>
         <h1 className="text-2xl font-bold text-slate-100">
           Good {getGreeting()}, {user?.username} 👋
@@ -40,12 +93,14 @@ export default function DashboardPage() {
         <p className="text-slate-400 mt-1">Here's your life at a glance.</p>
       </div>
 
+      <WeatherCard />
+
       {/* Stat row */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard icon={<Dumbbell size={20} className="text-indigo-400" />} label="Active Workout" value={data?.active_workout_plan?.name ?? 'None set'} sub={data?.active_workout_plan ? `${data.active_workout_plan.exercise_count} exercises` : 'Go to Workout'} />
         <StatCard icon={<UtensilsCrossed size={20} className="text-green-400" />} label="Meal Plan" value={data?.active_meal_plan?.name ?? 'None set'} sub={data?.active_meal_plan?.goal?.replace('_', ' ') ?? 'Go to Meal Plan'} />
         <StatCard icon={<ShoppingCart size={20} className="text-yellow-400" />} label="Shopping Lists" value={String(data?.shopping_list_count ?? 0)} sub="active lists" />
-        <StatCard icon={<CheckSquare size={20} className="text-red-400" />} label="Tasks Due" value={String(data?.today_tasks?.length ?? 0)} sub="today / overdue" />
+        <StatCard icon={<CheckSquare size={20} className="text-red-400" />} label="Open Tasks" value={String(data?.today_tasks?.length ?? 0)} sub="incomplete" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -109,22 +164,28 @@ export default function DashboardPage() {
         <Card>
           <h2 className="text-sm font-semibold text-slate-300 mb-4 flex items-center gap-2">
             <CheckSquare size={16} className="text-red-400" />
-            Tasks Due
+            Open Tasks
           </h2>
           {data?.today_tasks && data.today_tasks.length > 0 ? (
             <div className="space-y-2">
-              {data.today_tasks.map((task) => (
-                <div key={task.id} className="flex items-center gap-3 text-sm">
-                  <div className={`w-2 h-2 rounded-full flex-shrink-0 ${
-                    task.priority === 'high' ? 'bg-red-400' : task.priority === 'medium' ? 'bg-yellow-400' : 'bg-slate-500'
-                  }`} />
-                  <span className="text-slate-300 flex-1 truncate">{task.title}</span>
-                  {task.due_date && <span className="text-slate-500 text-xs">{formatDate(task.due_date)}</span>}
-                </div>
-              ))}
+              {data.today_tasks.map((task) => {
+                const overdue = task.due_date && new Date(task.due_date) < new Date(new Date().toDateString())
+                return (
+                  <div key={task.id} className="flex items-center gap-3 text-sm">
+                    <div className={`w-2 h-2 rounded-full flex-shrink-0 ${
+                      task.priority === 'high' ? 'bg-red-400' : task.priority === 'medium' ? 'bg-yellow-400' : 'bg-slate-500'
+                    }`} />
+                    <span className="text-slate-300 flex-1 truncate">{task.title}</span>
+                    {task.due_date
+                      ? <span className={`text-xs ${overdue ? 'text-red-400 font-medium' : 'text-slate-500'}`}>{overdue ? 'Overdue' : formatDate(task.due_date)}</span>
+                      : <span className="text-xs text-slate-600">No date</span>
+                    }
+                  </div>
+                )
+              })}
             </div>
           ) : (
-            <p className="text-slate-400 text-sm">No tasks due. You're all caught up!</p>
+            <p className="text-slate-400 text-sm">All caught up! No open tasks.</p>
           )}
         </Card>
 
