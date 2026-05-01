@@ -4,7 +4,7 @@ from sqlalchemy.orm import sessionmaker
 from .config import get_settings
 
 settings = get_settings()
-_url = settings.db_url
+_url = settings.db_url.replace("postgres://", "postgresql://", 1)
 
 if _url.startswith("sqlite"):
     _connect_args = {"check_same_thread": False}
