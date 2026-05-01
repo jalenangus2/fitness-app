@@ -5,7 +5,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 def _resolve_db_url() -> str:
     """Check all env var names Vercel might use for a connected database."""
-    for key in ("DATABASE_URL", "POSTGRES_URL", "POSTGRES_PRISMA_URL", "SUPABASE_DB_URL"):
+    for key in ("DATABASE_URL", "POSTGRES_URL_NON_POOLING", "POSTGRES_URL", "POSTGRES_PRISMA_URL", "SUPABASE_DB_URL"):
         val = os.environ.get(key, "")
         if val and not val.startswith("sqlite"):
             return val
