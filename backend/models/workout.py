@@ -31,6 +31,7 @@ class WorkoutExercise(Base):
     name: Mapped[str] = mapped_column(String, nullable=False)
     sets: Mapped[int] = mapped_column(Integer, nullable=True)
     reps: Mapped[str] = mapped_column(Text, nullable=True)
+    weight_lbs: Mapped[float] = mapped_column(nullable=True)
     rest_seconds: Mapped[int] = mapped_column(Integer, nullable=True)
     notes: Mapped[str] = mapped_column(Text, nullable=True)
     order_index: Mapped[int] = mapped_column(Integer, default=0)

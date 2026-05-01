@@ -12,6 +12,7 @@ export interface WorkoutExercise {
   name: string
   sets: number | null
   reps: string | null
+  weight_lbs: number | null
   rest_seconds: number | null
   notes: string | null
   order_index: number
