@@ -4,10 +4,12 @@ from sqlalchemy.orm import sessionmaker
 from .config import get_settings
 
 settings = get_settings()
-_url = settings.DATABASE_URL
+_url = settings.db_url
 
 if _url.startswith("sqlite"):
     _connect_args = {"check_same_thread": False}
+elif "sslmode" in _url:
+    _connect_args = {}  # SSL already in the URL
 else:
     _connect_args = {"sslmode": "require"}
 
