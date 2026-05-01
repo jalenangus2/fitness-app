@@ -86,7 +86,7 @@ export default function MealPage() {
           <h2 className="text-lg font-bold text-slate-100">Today's Nutrition</h2>
           <Button size="sm" onClick={() => setShowLogModal(true)}><Plus size={14} className="mr-1"/> Quick Add</Button>
         </div>
-        <div className="grid grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <MacroRing label="Calories" current={Math.round(dailyTotals.cals)} target={dailyTargets.cals} unit="kcal" color="#10b981" />
           <MacroRing label="Protein" current={Math.round(dailyTotals.prot)} target={dailyTargets.prot} unit="g" color="#3b82f6" />
           <MacroRing label="Carbs" current={Math.round(dailyTotals.carb)} target={dailyTargets.carb} unit="g" color="#f59e0b" />
@@ -141,8 +141,8 @@ export default function MealPage() {
                       setFoodSearch('')
                     }}
                   >
-                    <span className="text-sm text-slate-200">{food.name}</span>
-                    <span className="text-xs text-slate-500 ml-2">{food.calories} kcal · P:{food.protein_g}g · C:{food.carbs_g}g · F:{food.fat_g}g</span>
+                    <p className="text-sm text-slate-200">{food.name}</p>
+                    <p className="text-xs text-slate-500 mt-0.5">{food.calories} kcal · P:{food.protein_g}g · C:{food.carbs_g}g · F:{food.fat_g}g</p>
                   </li>
                 ))}
               </ul>
@@ -167,7 +167,7 @@ export default function MealPage() {
             <Input label="Daily Calories" type="number" min={1000} value={form.target_calories} onChange={(e) => setForm({ ...form, target_calories: Number(e.target.value) })} />
             <Input label="Duration (days)" type="number" min={1} max={14} value={form.duration_days} onChange={(e) => setForm({ ...form, duration_days: Number(e.target.value) })} />
           </div>
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-3 gap-3">
             <Input label="Protein (g)" type="number" min={0} value={form.target_protein_g} onChange={(e) => setForm({ ...form, target_protein_g: Number(e.target.value) })} />
             <Input label="Carbs (g)" type="number" min={0} value={form.target_carbs_g} onChange={(e) => setForm({ ...form, target_carbs_g: Number(e.target.value) })} />
             <Input label="Fat (g)" type="number" min={0} value={form.target_fat_g} onChange={(e) => setForm({ ...form, target_fat_g: Number(e.target.value) })} />
