@@ -11,12 +11,12 @@ const PRIMARY = [
   { to: '/workout', icon: Dumbbell, label: 'Workout' },
   { to: '/meal', icon: UtensilsCrossed, label: 'Meals' },
   { to: '/schedule', icon: Calendar, label: 'Schedule' },
-  { to: '/finance', icon: DollarSign, label: 'Finance' },
+  { to: '/fashion', icon: Shirt, label: 'Fashion' },
 ]
 
 const MORE = [
   { to: '/shopping', icon: ShoppingCart, label: 'Shopping' },
-  { to: '/fashion', icon: Shirt, label: 'Fashion' },
+  { to: '/finance', icon: DollarSign, label: 'Finance' },
 ]
 
 export default function BottomNav() {

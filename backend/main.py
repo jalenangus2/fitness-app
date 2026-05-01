@@ -18,6 +18,7 @@ def _run_migrations() -> None:
             "ALTER TABLE workout_plans ADD COLUMN IF NOT EXISTS is_ai_generated BOOLEAN DEFAULT false",
             "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS recurrence_rule TEXT",
             "ALTER TABLE meal_plans ADD COLUMN IF NOT EXISTS is_ai_generated BOOLEAN DEFAULT false",
+            "ALTER TABLE workout_exercises ADD COLUMN IF NOT EXISTS weight_lbs REAL",
         ]
         with engine.connect() as conn:
             for sql in stmts:
@@ -28,6 +29,7 @@ def _run_migrations() -> None:
             "ALTER TABLE workout_plans ADD COLUMN is_ai_generated BOOLEAN DEFAULT 0",
             "ALTER TABLE tasks ADD COLUMN recurrence_rule TEXT",
             "ALTER TABLE meal_plans ADD COLUMN is_ai_generated BOOLEAN DEFAULT 0",
+            "ALTER TABLE workout_exercises ADD COLUMN weight_lbs REAL",
         ]
         with engine.connect() as conn:
             for sql in stmts:
