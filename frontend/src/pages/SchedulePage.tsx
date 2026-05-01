@@ -115,17 +115,17 @@ export default function SchedulePage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-slate-100">Schedule</h1>
           <p className="text-slate-400 mt-1">Your calendar and task manager.</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="secondary" onClick={handleFashionSync} loading={fashionSync.isPending} title="Sync upcoming fashion drops to calendar">
-            <RefreshCw size={14} /> Fashion Drops
+          <Button variant="secondary" size="sm" onClick={handleFashionSync} loading={fashionSync.isPending} title="Sync upcoming fashion drops to calendar">
+            <RefreshCw size={13} /> Fashion Drops
           </Button>
-          <Button variant="secondary" onClick={() => setShowTaskModal(true)}><Plus size={16} /> Task</Button>
-          <Button onClick={() => setShowEventModal(true)}><Plus size={16} /> Event</Button>
+          <Button variant="secondary" size="sm" onClick={() => setShowTaskModal(true)}><Plus size={15} /> Task</Button>
+          <Button size="sm" onClick={() => setShowEventModal(true)}><Plus size={15} /> Event</Button>
         </div>
       </div>
 
@@ -264,7 +264,7 @@ export default function SchedulePage() {
         <div className="space-y-4">
           <Input label="Title" value={eventForm.title} onChange={(e) => setEventForm({ ...eventForm, title: e.target.value })} placeholder="Team meeting" autoFocus />
           <Input label="Description" value={eventForm.description} onChange={(e) => setEventForm({ ...eventForm, description: e.target.value })} placeholder="Optional" />
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Input label="Start" type="datetime-local" value={eventForm.start_datetime} onChange={(e) => setEventForm({ ...eventForm, start_datetime: e.target.value })} />
             <Input label="End" type="datetime-local" value={eventForm.end_datetime} onChange={(e) => setEventForm({ ...eventForm, end_datetime: e.target.value })} />
           </div>
