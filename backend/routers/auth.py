@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 from ..config import get_settings
 from ..database import get_db
 from ..models.user import User
-from ..schemas.auth import Token, UserCreate, UserResponse
+from ..schemas.auth import Token, UserCreate, UserResponse, UserUpdate
 
 ALGORITHM = "HS256"
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/token")
@@ -89,4 +89,13 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
 
 @router.get("/me", response_model=UserResponse)
 def get_me(current_user: User = Depends(get_current_user)):
+    return current_user
+
+
+@router.patch("/me", response_model=UserResponse)
+def update_me(data: UserUpdate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    if data.display_name is not None:
+        current_user.display_name = data.display_name.strip() or None
+    db.commit()
+    db.refresh(current_user)
     return current_user

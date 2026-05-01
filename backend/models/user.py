@@ -10,6 +10,7 @@ class User(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     email: Mapped[str] = mapped_column(String, unique=True, nullable=False)
     username: Mapped[str] = mapped_column(String, unique=True, nullable=False)
+    display_name: Mapped[str] = mapped_column(String, nullable=True)
     hashed_password: Mapped[str] = mapped_column(String, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
