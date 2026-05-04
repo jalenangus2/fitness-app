@@ -234,14 +234,14 @@ function TransactionsTab() {
   return (
     <div className="space-y-4">
       {/* Filters */}
-      <div className="flex gap-3 flex-wrap">
+      <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
         <input
           type="month"
           value={month}
           onChange={e => setMonth(e.target.value)}
           className="bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
         />
-        <div className="relative flex-1 min-w-48">
+        <div className="relative flex-1 min-w-0">
           <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
             className="w-full bg-slate-700 border border-slate-600 rounded-lg pl-9 pr-3 py-2 text-sm text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
@@ -271,7 +271,7 @@ function TransactionsTab() {
         <Card className="p-0 overflow-hidden">
           <div className="divide-y divide-slate-700">
             {txns.map((txn) => (
-              <div key={txn.id} className="flex items-center gap-3 px-5 py-3 hover:bg-slate-700/30 transition-colors">
+              <div key={txn.id} className="flex items-center gap-2 sm:gap-3 px-3 sm:px-5 py-3 hover:bg-slate-700/30 transition-colors">
                 {txn.logo_url ? (
                   <img src={txn.logo_url} alt="" className="w-9 h-9 rounded-lg object-contain bg-white p-0.5 flex-shrink-0" />
                 ) : (
@@ -292,7 +292,7 @@ function TransactionsTab() {
                   {editingId === txn.id ? (
                     <div className="flex items-center gap-1">
                       <input
-                        className="bg-slate-700 border border-slate-500 rounded px-2 py-1 text-xs text-slate-100 w-36 focus:outline-none"
+                        className="bg-slate-700 border border-slate-500 rounded px-2 py-1 text-xs text-slate-100 w-24 sm:w-36 focus:outline-none"
                         value={editValue}
                         onChange={e => setEditValue(e.target.value)}
                         onKeyDown={e => e.key === 'Enter' && handleSaveCategory(txn)}
@@ -481,9 +481,9 @@ function GoalsTab() {
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <p className="text-slate-400 text-sm">Track savings milestones and see what you need to save each week.</p>
-        <Button size="sm" onClick={() => setShowModal(true)}><Plus size={14} className="mr-1" /> New Goal</Button>
+        <Button size="sm" onClick={() => setShowModal(true)} className="self-start sm:self-auto"><Plus size={14} className="mr-1" /> New Goal</Button>
       </div>
 
       {goals.length === 0 ? (
