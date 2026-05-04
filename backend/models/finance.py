@@ -75,3 +75,18 @@ class Budget(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     user = relationship("User", back_populates="budgets")
+
+
+class FinancialGoal(Base):
+    __tablename__ = "financial_goals"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False)
+    goal_name: Mapped[str] = mapped_column(String, nullable=False)
+    target_amount: Mapped[float] = mapped_column(Float, nullable=False)
+    current_amount: Mapped[float] = mapped_column(Float, default=0.0)
+    target_date: Mapped[date] = mapped_column(Date, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    user = relationship("User", back_populates="financial_goals")

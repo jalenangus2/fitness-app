@@ -422,6 +422,27 @@ export interface CrossModuleResponse {
   has_nutrition_data: boolean
 }
 
+export interface FinancialGoal {
+  id: number
+  user_id: number
+  goal_name: string
+  target_amount: number
+  current_amount: number
+  target_date: string | null
+  days_remaining: number | null
+  daily_savings_needed: number | null
+  weekly_savings_needed: number | null
+  percent_complete: number
+  created_at: string
+}
+
+export interface FinancialGoalCreate {
+  goal_name: string
+  target_amount: number
+  current_amount?: number
+  target_date?: string | null
+}
+
 // ─── Dashboard ────────────────────────────────────────────────────────────────
 export interface DashboardSummary {
   active_workout_plan: {

@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime
 from typing import Optional
 from pydantic import BaseModel, ConfigDict, computed_field
 
@@ -104,3 +104,35 @@ class FinanceSummary(BaseModel):
     top_categories: list[CategoryAmount]
     budgets_with_spend: list[BudgetResponse]
     accounts: list[AccountResponse]
+
+
+# ─── Financial Goals ──────────────────────────────────────────────────────────
+
+class FinancialGoalCreate(BaseModel):
+    goal_name: str
+    target_amount: float
+    current_amount: float = 0.0
+    target_date: Optional[date] = None
+
+
+class FinancialGoalUpdate(BaseModel):
+    goal_name: Optional[str] = None
+    target_amount: Optional[float] = None
+    current_amount: Optional[float] = None
+    target_date: Optional[date] = None
+
+
+class FinancialGoalResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    user_id: int
+    goal_name: str
+    target_amount: float
+    current_amount: float
+    target_date: Optional[date]
+    days_remaining: Optional[int]
+    daily_savings_needed: Optional[float]
+    weekly_savings_needed: Optional[float]
+    percent_complete: float
+    created_at: datetime

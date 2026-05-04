@@ -214,13 +214,13 @@ export default function WorkoutPage() {
       </div>
 
       {/* Tab bar */}
-      <div className="flex bg-slate-800 p-1 rounded-xl w-fit gap-1">
+      <div className="flex bg-slate-800 p-1 rounded-xl w-full gap-1">
         <button onClick={() => setActiveTab('plans')}
-          className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === 'plans' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}>
+          className={`flex-1 flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === 'plans' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}>
           <Dumbbell size={14} /> Plans
         </button>
         <button onClick={() => setActiveTab('history')}
-          className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === 'history' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}>
+          className={`flex-1 flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === 'history' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}>
           <BarChart2 size={14} /> History
         </button>
       </div>
@@ -303,11 +303,11 @@ export default function WorkoutPage() {
                 <button onClick={() => setManualExercises([...manualExercises, { name: '', sets: 3, reps: '10' }])} className="text-indigo-400 text-xs flex items-center gap-1"><Plus size={12} /> Add</button>
               </div>
             </h4>
-            <div className="grid grid-cols-[1fr_52px_52px_72px_32px] gap-2 text-xs text-slate-500 px-1">
+            <div className="grid grid-cols-[1fr_44px_44px_60px_28px] gap-1.5 text-xs text-slate-500 px-1">
               <span>Exercise</span><span>Sets</span><span>Reps</span><span>Wt (lbs)</span><span />
             </div>
             {manualExercises.map((ex, i) => (
-              <div key={i} className="grid grid-cols-[1fr_52px_52px_72px_32px] gap-2 items-center bg-slate-800 p-2 rounded">
+              <div key={i} className="grid grid-cols-[1fr_44px_44px_60px_28px] gap-1.5 items-center bg-slate-800 p-2 rounded">
                 <Input value={ex.name || ''} onChange={e => { const nm = [...manualExercises]; nm[i].name = e.target.value; setManualExercises(nm) }} placeholder="e.g. Bench Press" />
                 <Input type="number" value={ex.sets || ''} onChange={e => { const nm = [...manualExercises]; nm[i].sets = Number(e.target.value); setManualExercises(nm) }} placeholder="3" />
                 <Input value={ex.reps || ''} onChange={e => { const nm = [...manualExercises]; nm[i].reps = e.target.value; setManualExercises(nm) }} placeholder="10" />
@@ -373,7 +373,7 @@ export default function WorkoutPage() {
             </div>
 
             <div className="grid grid-cols-3 gap-2 text-xs text-slate-500 px-1">
-              <span>Sets</span><span>Reps</span><span>Weight (lbs)</span>
+              <span>Sets</span><span>Reps</span><span>Wt (lbs)</span>
             </div>
 
             {logExercises.map((ex, exIdx) => (
