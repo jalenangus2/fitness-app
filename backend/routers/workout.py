@@ -21,6 +21,7 @@ def _serialize_plan(plan: WorkoutPlan) -> WorkoutPlanResponse:
     exercises = [
         WorkoutExerciseResponse(
             id=ex.id, name=ex.name, sets=ex.sets, reps=ex.reps,
+            weight_lbs=ex.weight_lbs, duration_secs=ex.duration_secs,
             rest_seconds=ex.rest_seconds, notes=ex.notes, order_index=ex.order_index,
         )
         for ex in sorted(plan.exercises, key=lambda e: e.order_index)
@@ -52,7 +53,9 @@ def create_workout_plan(data: WorkoutPlanCreate, current_user: User = Depends(ge
     for ex_data in data.exercises:
         exercise = WorkoutExercise(
             plan_id=plan.id, name=ex_data.name, sets=ex_data.sets,
-            reps=ex_data.reps, rest_seconds=ex_data.rest_seconds,
+            reps=ex_data.reps, weight_lbs=ex_data.weight_lbs,
+            duration_secs=ex_data.duration_secs,
+            rest_seconds=ex_data.rest_seconds,
             notes=ex_data.notes, order_index=ex_data.order_index
         )
         db.add(exercise)
@@ -67,6 +70,17 @@ def delete_workout_plan(plan_id: int, current_user: User = Depends(get_current_u
     if not plan: raise HTTPException(status_code=404, detail="Plan not found")
     db.delete(plan)
     db.commit()
+
+@router.patch("/{plan_id}", response_model=WorkoutPlanResponse)
+def update_workout_plan(plan_id: int, data: WorkoutPlanUpdate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    plan = db.query(WorkoutPlan).filter(WorkoutPlan.id == plan_id, WorkoutPlan.user_id == current_user.id).first()
+    if not plan: raise HTTPException(status_code=404, detail="Plan not found")
+    if data.name is not None: plan.name = data.name.strip()
+    if data.difficulty is not None: plan.difficulty = data.difficulty
+    if data.duration_mins is not None: plan.duration_mins = data.duration_mins
+    db.commit()
+    db.refresh(plan)
+    return _serialize_plan(plan)
 
 @router.patch("/{plan_id}/activate", response_model=WorkoutPlanResponse)
 def activate_workout_plan(plan_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):

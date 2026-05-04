@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { format, parseISO } from 'date-fns'
-import { Plus, Zap, CheckCircle, Trash2, ChevronDown, Play, Timer, X, Minus, BarChart2, Dumbbell, ClipboardList } from 'lucide-react'
+import { Plus, Zap, CheckCircle, Trash2, ChevronDown, Play, Timer, X, Minus, BarChart2, Dumbbell, ClipboardList, Pencil, Check } from 'lucide-react'
 import {
-  useWorkouts, useCreateWorkout, useActivateWorkout,
+  useWorkouts, useCreateWorkout, useActivateWorkout, useUpdateWorkout,
   useDeleteWorkout, useStartSession, useLogSet, useFinishSession,
   useWorkoutSessions, useDeleteSession,
 } from '../hooks/useWorkout'
@@ -28,6 +28,7 @@ export default function WorkoutPage() {
 
   const createManual = useCreateWorkout()
   const activate = useActivateWorkout()
+  const updatePlan = useUpdateWorkout()
   const remove = useDeleteWorkout()
   const startSession = useStartSession()
   const logSet = useLogSet()
@@ -259,6 +260,7 @@ export default function WorkoutPage() {
               onActivate={() => activate.mutateAsync(plan.id!)}
               onDelete={() => remove.mutateAsync(plan.id!)}
               onStart={() => handleStartWorkout(plan)}
+              onRename={(name) => updatePlan.mutateAsync({ id: plan.id!, data: { name } }).then(() => toast('Plan renamed!', 'success'))}
             />
           ))}
         </div>
@@ -471,14 +473,46 @@ export default function WorkoutPage() {
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
-function WorkoutPlanCard({ plan, expanded, onToggle, onActivate, onDelete, onStart }: any) {
+function WorkoutPlanCard({ plan, expanded, onToggle, onActivate, onDelete, onStart, onRename }: any) {
+  const [editing, setEditing] = useState(false)
+  const [editName, setEditName] = useState(plan.name)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => { if (editing) inputRef.current?.focus() }, [editing])
+
+  const save = () => {
+    const trimmed = editName.trim()
+    if (trimmed && trimmed !== plan.name) onRename(trimmed)
+    setEditing(false)
+  }
+  const cancel = () => { setEditName(plan.name); setEditing(false) }
+
   return (
     <Card className={plan.is_active ? 'border-indigo-500/50 shadow-md shadow-indigo-500/10' : ''}>
       <div className="flex items-start justify-between">
         <div className="flex-1 cursor-pointer" onClick={onToggle}>
           <div className="flex items-center gap-2">
-            <h3 className="font-semibold text-slate-100">{plan.name}</h3>
-            {plan.is_ai_generated && <Zap size={12} className="text-yellow-400" />}
+            {editing ? (
+              <div className="flex items-center gap-1 flex-1" onClick={e => e.stopPropagation()}>
+                <input
+                  ref={inputRef}
+                  value={editName}
+                  onChange={e => setEditName(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') save(); if (e.key === 'Escape') cancel() }}
+                  className="flex-1 bg-slate-700 border border-indigo-500 rounded px-2 py-0.5 text-sm font-semibold text-slate-100 focus:outline-none"
+                />
+                <button onClick={save} className="text-emerald-400 p-1"><Check size={15} /></button>
+                <button onClick={cancel} className="text-slate-400 p-1"><X size={15} /></button>
+              </div>
+            ) : (
+              <>
+                <h3 className="font-semibold text-slate-100">{plan.name}</h3>
+                <button onClick={e => { e.stopPropagation(); setEditing(true) }} className="text-slate-500 hover:text-slate-300 p-0.5">
+                  <Pencil size={12} />
+                </button>
+              </>
+            )}
+            {plan.is_ai_generated && !editing && <Zap size={12} className="text-yellow-400" />}
           </div>
           <div className="flex gap-1.5 mt-2 flex-wrap">
             {plan.is_active && <Badge variant="indigo">Active</Badge>}
