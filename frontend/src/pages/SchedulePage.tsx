@@ -107,7 +107,15 @@ export default function SchedulePage() {
   }
 
   const eventsOnDay = (d: Date) =>
-    events.filter((e) => isSameDay(parseISO(e.start_datetime), d))
+    events.filter((e) => {
+      const start = parseISO(e.start_datetime)
+      if (!e.end_datetime) return isSameDay(start, d)
+      const end = parseISO(e.end_datetime)
+      const dStr = format(d, 'yyyy-MM-dd')
+      const startStr = format(start, 'yyyy-MM-dd')
+      const endStr = format(end, 'yyyy-MM-dd')
+      return dStr >= startStr && dStr <= endStr
+    })
 
   const selectedEvents = eventsOnDay(selectedDate)
   const selectedTasks = tasks.filter((t) => t.due_date && isSameDay(parseISO(t.due_date), selectedDate))
@@ -165,12 +173,16 @@ export default function SchedulePage() {
                       {format(d, 'd')}
                     </span>
                     <div className="mt-1 space-y-0.5">
-                      {dayEvents.slice(0, 2).map((ev, idx) => (
-                        <div key={`${ev.id}-${idx}`} className="text-xs truncate rounded px-1 py-0.5 flex items-center gap-0.5" style={{ backgroundColor: ev.color + '33', color: ev.color }}>
-                          {ev.recurrence_rule && <Repeat size={8} className="flex-shrink-0" />}
-                          <span className="truncate">{ev.title}</span>
-                        </div>
-                      ))}
+                      {dayEvents.slice(0, 2).map((ev, idx) => {
+                        const evStart = parseISO(ev.start_datetime)
+                        const isContinuation = !isSameDay(evStart, d)
+                        return (
+                          <div key={`${ev.id}-${idx}`} className="text-xs truncate rounded px-1 py-0.5 flex items-center gap-0.5" style={{ backgroundColor: ev.color + '33', color: ev.color }}>
+                            {isContinuation ? <span className="flex-shrink-0 text-[9px]">←</span> : ev.recurrence_rule ? <Repeat size={8} className="flex-shrink-0" /> : null}
+                            <span className="truncate">{ev.title}</span>
+                          </div>
+                        )
+                      })}
                       {dayEvents.length > 2 && <p className="text-xs text-slate-500">+{dayEvents.length - 2}</p>}
                     </div>
                   </div>
