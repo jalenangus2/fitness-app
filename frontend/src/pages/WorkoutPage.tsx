@@ -39,6 +39,7 @@ export default function WorkoutPage() {
   const [showLogModal, setShowLogModal] = useState(false)
   const [showImport, setShowImport] = useState(false)
   const [importText, setImportText] = useState('')
+  const [importForLog, setImportForLog] = useState(false)
   const [expandedId, setExpandedId] = useState<number | null>(null)
   const [expandedSessionId, setExpandedSessionId] = useState<number | null>(null)
 
@@ -80,13 +81,25 @@ export default function WorkoutPage() {
       }
     }
     if (parsed.length > 0) {
-      setManualExercises(parsed)
+      if (importForLog) {
+        setLogExercises(parsed.map(ex => ({
+          name: ex.name || '',
+          sets: ex.sets ?? 3,
+          reps: Number(ex.reps) || 10,
+          weight: ex.weight_lbs ?? 0,
+          use_seconds: !!ex.duration_secs,
+          duration_secs: ex.duration_secs ?? 45,
+        })))
+      } else {
+        setManualExercises(parsed)
+      }
       toast(`Imported ${parsed.length} exercise${parsed.length !== 1 ? 's' : ''}`, 'success')
     } else {
       toast('No exercises found — try "Bench Press 3x10 - 135" format', 'error')
     }
     setShowImport(false)
     setImportText('')
+    setImportForLog(false)
   }
 
   const handleCreate = async () => {
@@ -303,7 +316,7 @@ export default function WorkoutPage() {
             <h4 className="text-sm text-slate-300 font-medium flex justify-between items-center">
               Exercises
               <div className="flex gap-3">
-                <button onClick={() => setShowImport(true)} className="text-slate-400 text-xs flex items-center gap-1 hover:text-slate-200">Paste from Notes</button>
+                <button onClick={() => { setImportForLog(false); setShowImport(true) }} className="text-slate-400 text-xs flex items-center gap-1 hover:text-slate-200">Paste from Notes</button>
                 <button onClick={() => setManualExercises([...manualExercises, { name: '', sets: 3, reps: '10' }])} className="text-indigo-400 text-xs flex items-center gap-1"><Plus size={12} /> Add</button>
               </div>
             </h4>
@@ -381,10 +394,13 @@ export default function WorkoutPage() {
           <div className="space-y-3 pt-2 border-t border-slate-700">
             <div className="flex justify-between items-center">
               <p className="text-sm font-semibold text-slate-300">Exercises</p>
-              <button onClick={() => setLogExercises(prev => [...prev, defaultLogExercise()])}
-                className="text-indigo-400 text-xs flex items-center gap-1 hover:text-indigo-300">
-                <Plus size={12} /> Add Exercise
-              </button>
+              <div className="flex gap-3">
+                <button onClick={() => { setImportForLog(true); setShowImport(true) }} className="text-slate-400 text-xs flex items-center gap-1 hover:text-slate-200">Paste from Notes</button>
+                <button onClick={() => setLogExercises(prev => [...prev, defaultLogExercise()])}
+                  className="text-indigo-400 text-xs flex items-center gap-1 hover:text-indigo-300">
+                  <Plus size={12} /> Add Exercise
+                </button>
+              </div>
             </div>
 
             {logExercises.map((ex, exIdx) => (
