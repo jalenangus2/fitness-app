@@ -302,7 +302,7 @@ export default function WorkoutPage() {
         </div>
       )}
 
-      {/* Create plan modal */}
+{/* Create plan modal */}
       <Modal isOpen={showModal} onClose={() => setShowModal(false)} title="Create Workout Plan" size="lg">
         <div className="space-y-4">
           <Input label="Plan Name" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="e.g. Push Day" />
@@ -353,24 +353,7 @@ export default function WorkoutPage() {
         </div>
       </Modal>
 
-      {/* Import from notes modal */}
-      <Modal isOpen={showImport} onClose={() => setShowImport(false)} title="Paste Workout from Notes" size="lg">
-        <div className="space-y-3">
-          <p className="text-xs text-slate-400">One exercise per line. Add "s" for seconds (Ab days):<br /><span className="text-slate-300 font-mono">Bench Press 4x8 - 135</span><br /><span className="text-slate-300 font-mono">Plank 3x45s · Crunches 3x30s</span><br /><span className="text-slate-500 font-mono">Pull-ups 3x8 (no weight)</span></p>
-          <textarea
-            className="w-full h-48 bg-slate-800 border border-slate-600 text-slate-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none font-mono"
-            placeholder={"Bench Press 4x8 - 135\nIncline DB Press 3x10 - 70\nPlank 3x45s\nCrunches 3x30s\nLeg Raises 3x20"}
-            value={importText}
-            onChange={e => setImportText(e.target.value)}
-          />
-        </div>
-        <div className="flex gap-3 pt-4 mt-4 border-t border-slate-700">
-          <Button variant="secondary" onClick={() => setShowImport(false)} className="flex-1">Cancel</Button>
-          <Button onClick={parseImportText} className="flex-1">Import Exercises</Button>
-        </div>
-      </Modal>
-
-      {/* Log past workout modal */}
+      {/* Log past workout modal (MOVED ABOVE IMPORT MODAL) */}
       <Modal isOpen={showLogModal} onClose={() => setShowLogModal(false)} title="Log a Workout" size="lg">
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
@@ -467,6 +450,24 @@ export default function WorkoutPage() {
           <Button onClick={handleLogPastWorkout} className="flex-1"><CheckCircle size={16} /> Save Workout</Button>
         </div>
       </Modal>
+
+      {/* Import from notes modal (MOVED TO BE LAST) */}
+      <Modal isOpen={showImport} onClose={() => setShowImport(false)} title="Paste Workout from Notes" size="lg">
+        <div className="space-y-3">
+          <p className="text-xs text-slate-400">One exercise per line. Add "s" for seconds (Ab days):<br /><span className="text-slate-300 font-mono">Bench Press 4x8 - 135</span><br /><span className="text-slate-300 font-mono">Plank 3x45s · Crunches 3x30s</span><br /><span className="text-slate-500 font-mono">Pull-ups 3x8 (no weight)</span></p>
+          <textarea
+            className="w-full h-48 bg-slate-800 border border-slate-600 text-slate-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none font-mono"
+            placeholder={"Bench Press 4x8 - 135\nIncline DB Press 3x10 - 70\nPlank 3x45s\nCrunches 3x30s\nLeg Raises 3x20"}
+            value={importText}
+            onChange={e => setImportText(e.target.value)}
+          />
+        </div>
+        <div className="flex gap-3 pt-4 mt-4 border-t border-slate-700">
+          <Button variant="secondary" onClick={() => setShowImport(false)} className="flex-1">Cancel</Button>
+          <Button onClick={parseImportText} className="flex-1">Import Exercises</Button>
+        </div>
+      </Modal>
+
     </div>
   )
 }
