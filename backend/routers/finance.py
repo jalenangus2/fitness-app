@@ -8,13 +8,14 @@ from sqlalchemy.orm import Session
 from sqlalchemy import extract, func
 
 from ..database import get_db
-from ..models.finance import PlaidItem, PlaidAccount, Transaction, Budget
+from ..models.finance import PlaidItem, PlaidAccount, Transaction, Budget, FinancialGoal
 from ..models.user import User
 from ..routers.auth import get_current_user
 from ..schemas.finance import (
     AccountResponse, BudgetCreate, BudgetResponse, BudgetUpdate,
     CategoryAmount, FinanceSummary, PlaidExchangeRequest,
     PlaidLinkTokenResponse, SyncResponse, TransactionCategoryUpdate, TransactionResponse,
+    FinancialGoalCreate, FinancialGoalUpdate, FinancialGoalResponse,
 )
 from ..services import plaid_service
 from ..config import get_settings
@@ -425,6 +426,62 @@ def _apply_sync(db: Session, user_id: int, item: PlaidItem, result: dict) -> tup
 
     return added, modified, removed
 
+
+# ─── Financial Goals ──────────────────────────────────────────────────────────
+
+def _serialize_goal(goal: FinancialGoal) -> FinancialGoalResponse:
+    today = date.today()
+    days_remaining = (goal.target_date - today).days if goal.target_date else None
+    remaining = max(0.0, goal.target_amount - goal.current_amount)
+    daily = round(remaining / days_remaining, 2) if days_remaining and days_remaining > 0 else None
+    weekly = round(daily * 7, 2) if daily is not None else None
+    pct = round(min(100.0, (goal.current_amount / goal.target_amount) * 100), 1) if goal.target_amount > 0 else 0.0
+    return FinancialGoalResponse(
+        id=goal.id, user_id=goal.user_id, goal_name=goal.goal_name,
+        target_amount=goal.target_amount, current_amount=goal.current_amount,
+        target_date=goal.target_date, days_remaining=days_remaining,
+        daily_savings_needed=daily, weekly_savings_needed=weekly,
+        percent_complete=pct, created_at=goal.created_at,
+    )
+
+
+@router.get("/goals", response_model=list[FinancialGoalResponse])
+def list_goals(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    goals = db.query(FinancialGoal).filter(FinancialGoal.user_id == current_user.id).all()
+    return [_serialize_goal(g) for g in goals]
+
+
+@router.post("/goals", response_model=FinancialGoalResponse, status_code=status.HTTP_201_CREATED)
+def create_goal(data: FinancialGoalCreate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    goal = FinancialGoal(user_id=current_user.id, **data.model_dump())
+    db.add(goal)
+    db.commit()
+    db.refresh(goal)
+    return _serialize_goal(goal)
+
+
+@router.put("/goals/{goal_id}", response_model=FinancialGoalResponse)
+def update_goal(goal_id: int, data: FinancialGoalUpdate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    goal = db.query(FinancialGoal).filter(FinancialGoal.id == goal_id, FinancialGoal.user_id == current_user.id).first()
+    if not goal:
+        raise HTTPException(status_code=404, detail="Goal not found")
+    for k, v in data.model_dump(exclude_unset=True).items():
+        setattr(goal, k, v)
+    db.commit()
+    db.refresh(goal)
+    return _serialize_goal(goal)
+
+
+@router.delete("/goals/{goal_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_goal(goal_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    goal = db.query(FinancialGoal).filter(FinancialGoal.id == goal_id, FinancialGoal.user_id == current_user.id).first()
+    if not goal:
+        raise HTTPException(status_code=404, detail="Goal not found")
+    db.delete(goal)
+    db.commit()
+
+
+# ─── Helpers ──────────────────────────────────────────────────────────────────
 
 def _budget_with_spend(db: Session, budget: Budget, year: int, month: int) -> BudgetResponse:
     """Compute spent amount for a budget category in given month."""

@@ -1,5 +1,5 @@
 import client from './client'
-import type { PlaidAccount, Transaction, Budget, BudgetWithSpend, FinanceSummary } from '../types'
+import type { PlaidAccount, Transaction, Budget, BudgetWithSpend, FinanceSummary, FinancialGoal, FinancialGoalCreate } from '../types'
 
 export const getLinkToken = async (): Promise<{ link_token: string }> => {
   const res = await client.post('/finance/link/token')
@@ -68,4 +68,23 @@ export const deleteBudget = async (id: number): Promise<void> => {
 export const getFinanceSummary = async (): Promise<FinanceSummary> => {
   const res = await client.get('/finance/summary')
   return res.data
+}
+
+export const getGoals = async (): Promise<FinancialGoal[]> => {
+  const res = await client.get('/finance/goals')
+  return res.data
+}
+
+export const createGoal = async (data: FinancialGoalCreate): Promise<FinancialGoal> => {
+  const res = await client.post('/finance/goals', data)
+  return res.data
+}
+
+export const updateGoal = async (id: number, data: Partial<FinancialGoalCreate>): Promise<FinancialGoal> => {
+  const res = await client.put(`/finance/goals/${id}`, data)
+  return res.data
+}
+
+export const deleteGoal = async (id: number): Promise<void> => {
+  await client.delete(`/finance/goals/${id}`)
 }

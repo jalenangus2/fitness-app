@@ -9,6 +9,7 @@ import {
   useLinkToken, useExchangeToken, useAccounts, useDeleteAccount,
   useSyncTransactions, useTransactions, useUpdateTransactionCategory,
   useBudgets, useCreateBudget, useDeleteBudget, useFinanceSummary,
+  useGoals, useCreateGoal, useDeleteGoal,
 } from '../hooks/useFinance'
 import { useToast } from '../components/ui/Toast'
 import Card from '../components/ui/Card'
@@ -17,9 +18,9 @@ import Modal from '../components/ui/Modal'
 import Badge from '../components/ui/Badge'
 import Input from '../components/ui/Input'
 import Spinner from '../components/ui/Spinner'
-import type { BudgetWithSpend, Transaction } from '../types'
+import type { BudgetWithSpend, Transaction, FinancialGoal } from '../types'
 
-const TABS = ['Overview', 'Transactions', 'Budgets'] as const
+const TABS = ['Overview', 'Transactions', 'Budgets', 'Goals'] as const
 type Tab = typeof TABS[number]
 
 const BUDGET_COLORS = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#3b82f6', '#8b5cf6', '#ec4899', '#14b8a6']
@@ -233,14 +234,14 @@ function TransactionsTab() {
   return (
     <div className="space-y-4">
       {/* Filters */}
-      <div className="flex gap-3 flex-wrap">
+      <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
         <input
           type="month"
           value={month}
           onChange={e => setMonth(e.target.value)}
           className="bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
         />
-        <div className="relative flex-1 min-w-48">
+        <div className="relative flex-1 min-w-0">
           <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
             className="w-full bg-slate-700 border border-slate-600 rounded-lg pl-9 pr-3 py-2 text-sm text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
@@ -270,7 +271,7 @@ function TransactionsTab() {
         <Card className="p-0 overflow-hidden">
           <div className="divide-y divide-slate-700">
             {txns.map((txn) => (
-              <div key={txn.id} className="flex items-center gap-3 px-5 py-3 hover:bg-slate-700/30 transition-colors">
+              <div key={txn.id} className="flex items-center gap-2 sm:gap-3 px-3 sm:px-5 py-3 hover:bg-slate-700/30 transition-colors">
                 {txn.logo_url ? (
                   <img src={txn.logo_url} alt="" className="w-9 h-9 rounded-lg object-contain bg-white p-0.5 flex-shrink-0" />
                 ) : (
@@ -291,7 +292,7 @@ function TransactionsTab() {
                   {editingId === txn.id ? (
                     <div className="flex items-center gap-1">
                       <input
-                        className="bg-slate-700 border border-slate-500 rounded px-2 py-1 text-xs text-slate-100 w-36 focus:outline-none"
+                        className="bg-slate-700 border border-slate-500 rounded px-2 py-1 text-xs text-slate-100 w-24 sm:w-36 focus:outline-none"
                         value={editValue}
                         onChange={e => setEditValue(e.target.value)}
                         onKeyDown={e => e.key === 'Enter' && handleSaveCategory(txn)}
@@ -450,6 +451,109 @@ export default function FinancePage() {
       {tab === 'Overview' && <OverviewTab />}
       {tab === 'Transactions' && <TransactionsTab />}
       {tab === 'Budgets' && <BudgetsTab />}
+      {tab === 'Goals' && <GoalsTab />}
     </div>
+  )
+}
+
+// ─── Goals Tab ────────────────────────────────────────────────────────────────
+function GoalsTab() {
+  const { data: goals = [], isLoading } = useGoals()
+  const createGoal = useCreateGoal()
+  const deleteGoal = useDeleteGoal()
+  const { toast } = useToast()
+  const [showModal, setShowModal] = useState(false)
+  const [form, setForm] = useState({ goal_name: '', target_amount: 0, current_amount: 0, target_date: '' })
+
+  const handleCreate = async () => {
+    if (!form.goal_name || form.target_amount <= 0) return toast('Name and target amount are required.', 'error')
+    try {
+      await createGoal.mutateAsync({ ...form, target_date: form.target_date || null })
+      toast('Goal created!', 'success')
+      setShowModal(false)
+      setForm({ goal_name: '', target_amount: 0, current_amount: 0, target_date: '' })
+    } catch {
+      toast('Failed to create goal.', 'error')
+    }
+  }
+
+  if (isLoading) return <div className="flex justify-center h-40"><Spinner size="lg" /></div>
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <p className="text-slate-400 text-sm">Track savings milestones and see what you need to save each week.</p>
+        <Button size="sm" onClick={() => setShowModal(true)} className="self-start sm:self-auto"><Plus size={14} className="mr-1" /> New Goal</Button>
+      </div>
+
+      {goals.length === 0 ? (
+        <Card className="text-center py-12">
+          <DollarSign size={36} className="text-slate-600 mx-auto mb-3" />
+          <p className="text-slate-400 text-sm">No goals yet. Add one to start tracking.</p>
+        </Card>
+      ) : (
+        <div className="grid gap-4 sm:grid-cols-2">
+          {goals.map(goal => <GoalCard key={goal.id} goal={goal} onDelete={() => deleteGoal.mutateAsync(goal.id).then(() => toast('Goal removed.', 'info'))} />)}
+        </div>
+      )}
+
+      <Modal isOpen={showModal} onClose={() => setShowModal(false)} title="New Financial Goal">
+        <div className="space-y-4">
+          <Input label="Goal Name" value={form.goal_name} onChange={e => setForm({ ...form, goal_name: e.target.value })} placeholder="e.g. Emergency Fund" />
+          <div className="grid grid-cols-2 gap-4">
+            <Input label="Target ($)" type="number" min={1} value={form.target_amount} onChange={e => setForm({ ...form, target_amount: Number(e.target.value) })} />
+            <Input label="Current ($)" type="number" min={0} value={form.current_amount} onChange={e => setForm({ ...form, current_amount: Number(e.target.value) })} />
+          </div>
+          <Input label="Target Date (optional)" type="date" value={form.target_date} onChange={e => setForm({ ...form, target_date: e.target.value })} />
+          <div className="flex gap-3 pt-2">
+            <Button variant="secondary" onClick={() => setShowModal(false)} className="flex-1">Cancel</Button>
+            <Button onClick={handleCreate} className="flex-1">Create Goal</Button>
+          </div>
+        </div>
+      </Modal>
+    </div>
+  )
+}
+
+function GoalCard({ goal, onDelete }: { goal: FinancialGoal; onDelete: () => void }) {
+  const remaining = Math.max(0, goal.target_amount - goal.current_amount)
+  return (
+    <Card>
+      <div className="flex justify-between items-start mb-3">
+        <h3 className="font-semibold text-slate-100">{goal.goal_name}</h3>
+        <button onClick={onDelete} className="text-slate-600 hover:text-red-400 transition-colors"><Trash2 size={14} /></button>
+      </div>
+
+      <div className="mb-3">
+        <div className="flex justify-between text-xs text-slate-400 mb-1">
+          <span>{fmt$(goal.current_amount)} saved</span>
+          <span>{fmt$(goal.target_amount)} goal</span>
+        </div>
+        <div className="h-2.5 w-full bg-slate-700 rounded-full overflow-hidden">
+          <div
+            className="h-full bg-indigo-500 rounded-full transition-all duration-500"
+            style={{ width: `${goal.percent_complete}%` }}
+          />
+        </div>
+        <p className="text-right text-xs text-slate-500 mt-1">{goal.percent_complete}% complete</p>
+      </div>
+
+      <div className="border-t border-slate-700 pt-3 space-y-1">
+        {goal.days_remaining !== null && (
+          <p className="text-xs text-slate-400">
+            <span className="text-slate-200 font-medium">{goal.days_remaining}</span> days remaining
+            {goal.target_date && <span className="text-slate-600 ml-1">· {goal.target_date}</span>}
+          </p>
+        )}
+        {goal.weekly_savings_needed !== null && (
+          <p className="text-sm font-medium text-emerald-400">
+            Save {fmt$(goal.weekly_savings_needed)}<span className="text-slate-400 font-normal text-xs"> / week to stay on track</span>
+          </p>
+        )}
+        {goal.days_remaining === null && (
+          <p className="text-xs text-slate-500">{fmt$(remaining)} remaining · no deadline set</p>
+        )}
+      </div>
+    </Card>
   )
 }
