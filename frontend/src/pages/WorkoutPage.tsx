@@ -260,7 +260,7 @@ export default function WorkoutPage() {
               onActivate={() => activate.mutateAsync(plan.id!)}
               onDelete={() => remove.mutateAsync(plan.id!)}
               onStart={() => handleStartWorkout(plan)}
-              onRename={(name) => updatePlan.mutateAsync({ id: plan.id!, data: { name } }).then(() => toast('Plan renamed!', 'success'))}
+              onRename={(name: string) => updatePlan.mutateAsync({ id: plan.id!, data: { name } }).then(() => toast('Plan renamed!', 'success'))}
             />
           ))}
         </div>
