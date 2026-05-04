@@ -172,28 +172,32 @@ function ListDetail({ listId }: { listId: number }) {
       </div>
 
       {/* Add item row */}
-      <div className="flex gap-2 mb-6">
-        <input
-          className="flex-1 bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-          placeholder="Add item..."
-          value={newItem.ingredient_name}
-          onChange={(e) => setNewItem({ ...newItem, ingredient_name: e.target.value })}
-          onKeyDown={(e) => e.key === 'Enter' && handleAddItem()}
-        />
-        <input
-          className="w-24 bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-          placeholder="Qty"
-          value={newItem.quantity}
-          onChange={(e) => setNewItem({ ...newItem, quantity: e.target.value })}
-        />
-        <select
-          className="bg-slate-700 border border-slate-600 rounded-lg px-2 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-          value={newItem.category}
-          onChange={(e) => setNewItem({ ...newItem, category: e.target.value })}
-        >
-          {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
-        </select>
-        <Button onClick={handleAddItem} loading={addItem.isPending} size="sm"><Plus size={14} /></Button>
+      <div className="flex flex-col gap-2 mb-6">
+        <div className="flex gap-2">
+          <input
+            className="flex-1 min-w-0 bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            placeholder="Add item..."
+            value={newItem.ingredient_name}
+            onChange={(e) => setNewItem({ ...newItem, ingredient_name: e.target.value })}
+            onKeyDown={(e) => e.key === 'Enter' && handleAddItem()}
+          />
+          <Button onClick={handleAddItem} loading={addItem.isPending} size="sm"><Plus size={14} /></Button>
+        </div>
+        <div className="flex gap-2">
+          <input
+            className="flex-1 bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            placeholder="Qty (e.g. 2 lbs)"
+            value={newItem.quantity}
+            onChange={(e) => setNewItem({ ...newItem, quantity: e.target.value })}
+          />
+          <select
+            className="flex-1 bg-slate-700 border border-slate-600 rounded-lg px-2 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            value={newItem.category}
+            onChange={(e) => setNewItem({ ...newItem, category: e.target.value })}
+          >
+            {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+          </select>
+        </div>
       </div>
 
       {list.items.length === 0 ? (
@@ -221,8 +225,8 @@ function ListDetail({ listId }: { listId: number }) {
                         <ExternalLink size={14} />
                       </a>
                     )}
-                    <Button variant="ghost" size="sm" onClick={() => handleWalmartSearch(item)} className="text-xs text-slate-400 hover:text-yellow-400 px-2">
-                      <Search size={13} /> Walmart
+                    <Button variant="ghost" size="sm" onClick={() => handleWalmartSearch(item)} className="text-slate-400 hover:text-yellow-400 p-1.5" title="Search Walmart">
+                      <Search size={14} />
                     </Button>
                     <Button variant="ghost" size="sm" onClick={() => deleteItem.mutateAsync(item.id)} className="text-red-400 hover:text-red-300 hover:bg-red-500/10 p-1">
                       <Trash2 size={13} />
