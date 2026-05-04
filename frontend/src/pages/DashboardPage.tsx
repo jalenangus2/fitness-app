@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Dumbbell, UtensilsCrossed, ShoppingCart, Calendar, CheckSquare, Shirt, Sun, CloudSun, Cloud, CloudRain, CloudSnow, CloudLightning, Wind, MapPin, Pencil, Check, X } from 'lucide-react'
 import { useDashboard, useWeather } from '../hooks/useDashboard'
 import Card from '../components/ui/Card'
@@ -79,6 +80,7 @@ function MacroBar({ label, value, target, color }: { label: string; value: numbe
 export default function DashboardPage() {
   const { data, isLoading } = useDashboard()
   const { user, updateUser } = useAuthStore()
+  const navigate = useNavigate()
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
@@ -141,10 +143,10 @@ export default function DashboardPage() {
 
       {/* Stat row */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard icon={<Dumbbell size={20} className="text-indigo-400" />} label="Active Workout" value={data?.active_workout_plan?.name ?? 'None set'} sub={data?.active_workout_plan ? `${data.active_workout_plan.exercise_count} exercises` : 'Go to Workout'} />
-        <StatCard icon={<UtensilsCrossed size={20} className="text-green-400" />} label="Meal Plan" value={data?.active_meal_plan?.name ?? 'None set'} sub={data?.active_meal_plan?.goal?.replace('_', ' ') ?? 'Go to Meal Plan'} />
-        <StatCard icon={<ShoppingCart size={20} className="text-yellow-400" />} label="Shopping Lists" value={String(data?.shopping_list_count ?? 0)} sub="active lists" />
-        <StatCard icon={<CheckSquare size={20} className="text-red-400" />} label="Open Tasks" value={String(data?.today_tasks?.length ?? 0)} sub="incomplete" />
+        <StatCard icon={<Dumbbell size={20} className="text-indigo-400" />} label="Active Workout" value={data?.active_workout_plan?.name ?? 'None set'} sub={data?.active_workout_plan ? `${data.active_workout_plan.exercise_count} exercises` : 'Go to Workout'} onClick={() => navigate('/workout')} />
+        <StatCard icon={<UtensilsCrossed size={20} className="text-green-400" />} label="Meal Plan" value={data?.active_meal_plan?.name ?? 'None set'} sub={data?.active_meal_plan?.goal?.replace('_', ' ') ?? 'Go to Meal Plan'} onClick={() => navigate('/meal')} />
+        <StatCard icon={<ShoppingCart size={20} className="text-yellow-400" />} label="Shopping Lists" value={String(data?.shopping_list_count ?? 0)} sub="active lists" onClick={() => navigate('/shopping')} />
+        <StatCard icon={<CheckSquare size={20} className="text-red-400" />} label="Open Tasks" value={String(data?.today_tasks?.length ?? 0)} sub="incomplete" onClick={() => navigate('/schedule')} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -272,9 +274,9 @@ export default function DashboardPage() {
   )
 }
 
-function StatCard({ icon, label, value, sub }: { icon: React.ReactNode; label: string; value: string; sub: string }) {
+function StatCard({ icon, label, value, sub, onClick }: { icon: React.ReactNode; label: string; value: string; sub: string; onClick?: () => void }) {
   return (
-    <Card>
+    <Card className="cursor-pointer hover:border-slate-600 transition-all" onClick={onClick}>
       <div className="flex items-start justify-between mb-3">
         <div className="p-2 bg-slate-700 rounded-lg">{icon}</div>
       </div>
