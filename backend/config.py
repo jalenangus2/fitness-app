@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     PLAID_CLIENT_ID: str = ""
     PLAID_SECRET: str = ""
     PLAID_ENV: str = "sandbox"
+    BIBLE_API_KEY: str = ""
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

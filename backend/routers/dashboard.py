@@ -16,6 +16,7 @@ from ..models.workout import WorkoutPlan
 from ..models.user import User
 from ..routers.auth import get_current_user
 from ..services.weather_service import get_daily_weather
+from ..services.bible_service import get_daily_verse
 
 router = APIRouter()
 
@@ -38,6 +39,11 @@ async def get_weather(current_user: User = Depends(get_current_user)):
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Weather service unavailable.",
         )
+
+
+@router.get("/verse")
+async def daily_verse(current_user: User = Depends(get_current_user)):
+    return await get_daily_verse()
 
 
 class ActiveWorkoutSummary(BaseModel):

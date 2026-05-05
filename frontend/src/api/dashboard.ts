@@ -19,3 +19,14 @@ export const getWeather = async (): Promise<WeatherData> => {
   const res = await client.get('/dashboard/weather')
   return res.data
 }
+
+export interface VerseData {
+  reference: string
+  text: string
+  fallback: boolean
+}
+
+export const getDailyVerse = async (): Promise<VerseData> => {
+  const res = await client.get('/dashboard/verse')
+  return res.data
+}

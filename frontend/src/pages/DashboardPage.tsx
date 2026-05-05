@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Dumbbell, UtensilsCrossed, ShoppingCart, Calendar, CheckSquare, Shirt, Sun, CloudSun, Cloud, CloudRain, CloudSnow, CloudLightning, Wind, MapPin, Pencil, Check, X } from 'lucide-react'
-import { useDashboard, useWeather } from '../hooks/useDashboard'
+import { useDashboard, useWeather, useDailyVerse } from '../hooks/useDashboard'
 import Card from '../components/ui/Card'
 import Badge from '../components/ui/Badge'
 import Spinner from '../components/ui/Spinner'
@@ -79,6 +79,7 @@ function MacroBar({ label, value, target, color }: { label: string; value: numbe
 
 export default function DashboardPage() {
   const { data, isLoading } = useDashboard()
+  const { data: verse } = useDailyVerse()
   const { user, updateUser } = useAuthStore()
   const navigate = useNavigate()
   const [editing, setEditing] = useState(false)
@@ -140,6 +141,19 @@ export default function DashboardPage() {
       </div>
 
       <WeatherCard />
+
+      {/* Daily Bible Verse */}
+      {verse && (
+        <Card className="bg-gradient-to-br from-indigo-900/40 to-slate-800 border-indigo-700/30">
+          <div className="flex items-start gap-3">
+            <span className="text-2xl">✝</span>
+            <div>
+              <p className="text-sm text-slate-300 italic leading-relaxed">"{verse.text}"</p>
+              <p className="text-xs text-indigo-400 font-medium mt-2">— {verse.reference}</p>
+            </div>
+          </div>
+        </Card>
+      )}
 
       {/* Stat row */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">

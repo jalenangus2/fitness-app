@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { getDashboardSummary, getWeather } from '../api/dashboard'
+import { getDashboardSummary, getWeather, getDailyVerse } from '../api/dashboard'
 
 export function useDashboard() {
   return useQuery({
@@ -15,5 +15,13 @@ export function useWeather() {
     queryFn: getWeather,
     staleTime: 1000 * 60 * 15,
     retry: 1,
+  })
+}
+
+export function useDailyVerse() {
+  return useQuery({
+    queryKey: ['daily-verse'],
+    queryFn: getDailyVerse,
+    staleTime: 1000 * 60 * 60 * 12, // 12 hours
   })
 }
