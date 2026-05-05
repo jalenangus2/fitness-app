@@ -23,12 +23,36 @@ const RECURRENCE_OPTIONS = [
   { value: 'none', label: 'No recurrence' },
   { value: 'weekly', label: 'Weekly' },
   { value: 'biweekly', label: 'Every 2 weeks' },
-  { value: 'monthly', label: 'Monthly (~4 weeks)' },
+  { value: 'monthly', label: 'Monthly' },
+  { value: 'yearly', label: 'Yearly' },
 ]
 
-const RECURRENCE_DAYS: Record<string, number> = { weekly: 7, biweekly: 14, monthly: 28 }
+const RECURRENCE_DAYS: Record<string, number> = { weekly: 7, biweekly: 14, monthly: 28, yearly: 365 }
+
+const WEEKDAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
 const CATEGORY_FILTERS = ['All', 'Sneakers', 'Clothing', 'Accessories', 'Other']
+
+// Find the next occurrence of targetWeekday (0=Mon, 6=Sun) from start date.
+// occurrence=0 means the first instance (may be same day or next week).
+function getDateForWeekday(start: Date, targetWeekday: number, occurrence: number): Date {
+  const startDay = start.getDay() === 0 ? 6 : start.getDay() - 1 // convert Sun=0 to Mon=0
+  let daysUntilTarget = (targetWeekday - startDay + 7) % 7
+  if (daysUntilTarget === 0 && occurrence > 0) daysUntilTarget = 7
+  const d = new Date(start)
+  d.setDate(d.getDate() + daysUntilTarget + occurrence * 7)
+  return d
+}
+
+function getDateForMonthDay(start: Date, dayOfMonth: number, occurrence: number): Date {
+  return new Date(start.getFullYear(), start.getMonth() + occurrence, dayOfMonth)
+}
+
+function getDateForYearly(start: Date, occurrence: number): Date {
+  const d = new Date(start)
+  d.setFullYear(d.getFullYear() + occurrence)
+  return d
+}
 
 function CountdownBadge({ releaseDate }: { releaseDate: string }) {
   const days = daysUntil(releaseDate)
@@ -58,7 +82,7 @@ export default function FashionPage() {
   const [form, setForm] = useState({
     brand: '', name: '', category: 'sneakers', release_date: '',
     price_cents: '' as string | number, colorway: '', sku: '', image_url: '', retailer_url: '', notes: '',
-    recurrence: 'none', occurrences: 4,
+    recurrence: 'none', occurrences: 4, weekday: 4, dayOfMonth: 1,
   })
 
   const handleCreate = async () => {
@@ -73,23 +97,56 @@ export default function FashionPage() {
       price_cents: form.price_cents ? Math.round(Number(form.price_cents) * 100) : undefined,
     }
     const count = form.recurrence !== 'none' ? form.occurrences : 1
-    const intervalDays = RECURRENCE_DAYS[form.recurrence] ?? 0
     const startDate = new Date(form.release_date + 'T12:00:00')
+
     for (let i = 0; i < count; i++) {
-      const d = new Date(startDate)
-      d.setDate(d.getDate() + i * intervalDays)
+      let d: Date
+      if (form.recurrence === 'weekly') {
+        d = getDateForWeekday(startDate, form.weekday, i)
+      } else if (form.recurrence === 'monthly') {
+        d = getDateForMonthDay(startDate, form.dayOfMonth, i)
+      } else if (form.recurrence === 'yearly') {
+        d = getDateForYearly(startDate, i)
+      } else if (form.recurrence === 'biweekly') {
+        d = new Date(startDate)
+        d.setDate(d.getDate() + i * 14)
+      } else {
+        d = new Date(startDate)
+      }
       const dateStr = d.toISOString().split('T')[0]
       const nameSuffix = count > 1 ? ` (Drop ${i + 1})` : ''
       await createRelease.mutateAsync({ ...base, release_date: dateStr, name: base.name + nameSuffix })
     }
     toast(count > 1 ? `${count} recurring drops added!` : 'Release added!', 'success')
     setShowModal(false)
-    setForm({ brand: '', name: '', category: 'sneakers', release_date: '', price_cents: '', colorway: '', sku: '', image_url: '', retailer_url: '', notes: '', recurrence: 'none', occurrences: 4 })
+    setForm({
+      brand: '', name: '', category: 'sneakers', release_date: '', price_cents: '',
+      colorway: '', sku: '', image_url: '', retailer_url: '', notes: '',
+      recurrence: 'none', occurrences: 4, weekday: 4, dayOfMonth: 1,
+    })
   }
 
   const handleToggleAlert = async (release: FashionRelease) => {
     await toggleAlert.mutateAsync({ release })
     toast(release.alerts.length > 0 ? 'Alert removed.' : 'Alert set for 1 day before!', 'success')
+  }
+
+  const recurrenceDescription = () => {
+    if (form.recurrence === 'none') return null
+    const start = form.release_date || '...'
+    if (form.recurrence === 'weekly') {
+      return `Creates ${form.occurrences} releases starting ${start}, every ${WEEKDAY_NAMES[form.weekday]}.`
+    }
+    if (form.recurrence === 'biweekly') {
+      return `Creates ${form.occurrences} releases starting ${start}, every 14 days.`
+    }
+    if (form.recurrence === 'monthly') {
+      return `Creates ${form.occurrences} releases starting ${start}, on day ${form.dayOfMonth} of each month.`
+    }
+    if (form.recurrence === 'yearly') {
+      return `Creates ${form.occurrences} releases starting ${start}, once per year.`
+    }
+    return null
   }
 
   if (isLoading) return <div className="flex justify-center h-64"><Spinner size="lg" /></div>
@@ -179,8 +236,30 @@ export default function FashionPage() {
                 <Input label="# of Drops" type="number" min={2} max={52} value={form.occurrences} onChange={e => setForm({ ...form, occurrences: Number(e.target.value) })} />
               )}
             </div>
-            {form.recurrence !== 'none' && (
-              <p className="text-xs text-slate-500">Creates {form.occurrences} releases starting {form.release_date || '...'}, {form.recurrence === 'weekly' ? 'every 7 days' : form.recurrence === 'biweekly' ? 'every 14 days' : 'every 28 days'}.</p>
+            {form.recurrence === 'weekly' && (
+              <div>
+                <label className="block text-xs font-medium text-slate-400 mb-1">Day of week</label>
+                <select
+                  value={form.weekday}
+                  onChange={e => setForm({ ...form, weekday: Number(e.target.value) })}
+                  className="w-full bg-slate-700 border border-slate-600 text-slate-100 rounded-lg px-3 py-2 text-sm focus:outline-none"
+                >
+                  {WEEKDAY_NAMES.map((d, i) => <option key={i} value={i}>{d}</option>)}
+                </select>
+              </div>
+            )}
+            {form.recurrence === 'monthly' && (
+              <Input
+                label="Day of month"
+                type="number"
+                min={1}
+                max={28}
+                value={form.dayOfMonth}
+                onChange={e => setForm({ ...form, dayOfMonth: Number(e.target.value) })}
+              />
+            )}
+            {form.recurrence !== 'none' && recurrenceDescription() && (
+              <p className="text-xs text-slate-500">{recurrenceDescription()}</p>
             )}
           </div>
           <div className="flex gap-3 pt-2">
