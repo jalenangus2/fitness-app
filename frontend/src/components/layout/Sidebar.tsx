@@ -12,6 +12,7 @@ import {
 } from 'lucide-react'
 import { cn } from '../../utils/cn'
 import { useAuthStore } from '../../store/authStore'
+import NotificationBell from '../ui/NotificationBell'
 
 const navItems = [
   { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
@@ -30,11 +31,14 @@ export default function Sidebar() {
     <aside className="hidden lg:flex w-64 flex-shrink-0 bg-slate-900 border-r border-slate-700/50 flex-col h-screen sticky top-0">
       {/* Logo */}
       <div className="p-6 border-b border-slate-700/50">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center">
-            <Zap size={18} className="text-white" />
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center">
+              <Zap size={18} className="text-white" />
+            </div>
+            <span className="text-xl font-bold text-slate-100">LifeOS</span>
           </div>
-          <span className="text-xl font-bold text-slate-100">LifeOS</span>
+          <NotificationBell />
         </div>
         {user && (
           <p className="text-xs text-slate-400 mt-2 truncate">@{user.username}</p>
