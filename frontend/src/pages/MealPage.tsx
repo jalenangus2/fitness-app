@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react'
-import { Plus, Zap, CheckCircle, Trash2, ChevronDown, ShoppingCart, Search } from 'lucide-react'
-import { useMealPlans, useCreateMealPlan, useActivateMealPlan, useDeleteMealPlan, useDailyNutrition, useLogNutrition, useSearchFoods } from '../hooks/useMeal'
+import { format, parseISO } from 'date-fns'
+import { Plus, Zap, CheckCircle, Trash2, ChevronDown, ShoppingCart, Search, Pencil } from 'lucide-react'
+import { useMealPlans, useCreateMealPlan, useUpdateMealPlan, useActivateMealPlan, useDeleteMealPlan, useDailyNutrition, useLogNutrition, useSearchFoods, useNutritionHistory } from '../hooks/useMeal'
 import { useCreateShoppingList } from '../hooks/useShopping'
 import { useToast } from '../components/ui/Toast'
 import Card from '../components/ui/Card'
@@ -18,21 +19,25 @@ export default function MealPage() {
   const { data: plans = [], isLoading } = useMealPlans()
   const { data: logs = [] } = useDailyNutrition()
   const createManual = useCreateMealPlan()
+  const updatePlan = useUpdateMealPlan()
   const activate = useActivateMealPlan()
   const remove = useDeleteMealPlan()
   const createList = useCreateShoppingList()
   const logNutrients = useLogNutrition()
+  const { data: historyLogs = [] } = useNutritionHistory(30)
   const { toast } = useToast()
 
   // UI State
   const [showPlanModal, setShowPlanModal] = useState(false)
   const [showLogModal, setShowLogModal] = useState(false)
+  const [showGoalsModal, setShowGoalsModal] = useState(false)
   const [expandedId, setExpandedId] = useState<number | null>(null)
   const [expandedDay, setExpandedDay] = useState<number>(1)
 
   // Forms
   const [form, setForm] = useState({ name: '', goal: 'muscle_gain', target_calories: 2500, target_protein_g: 180, target_carbs_g: 250, target_fat_g: 80, duration_days: 7 })
   const [logForm, setLogForm] = useState({ name: '', calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 })
+  const [goalsForm, setGoalsForm] = useState({ target_calories: 2000, target_protein_g: 150, target_carbs_g: 200, target_fat_g: 65 })
   const [foodSearch, setFoodSearch] = useState('')
   const { data: foodResults = [] } = useSearchFoods(foodSearch)
 
@@ -52,6 +57,40 @@ export default function MealPage() {
     carb: acc.carb + log.carbs_g,
     fat: acc.fat + log.fat_g
   }), { cals: 0, prot: 0, carb: 0, fat: 0 }), [logs])
+
+  const openGoalsModal = () => {
+    setGoalsForm({
+      target_calories: dailyTargets.cals,
+      target_protein_g: dailyTargets.prot,
+      target_carbs_g: dailyTargets.carb,
+      target_fat_g: dailyTargets.fat,
+    })
+    setShowGoalsModal(true)
+  }
+
+  const handleSaveGoals = async () => {
+    try {
+      if (activePlan) {
+        await updatePlan.mutateAsync({ id: activePlan.id!, data: goalsForm })
+      } else {
+        await createManual.mutateAsync({ name: 'My Goals', goal: 'maintenance', ...goalsForm, duration_days: 365, is_ai_generated: false, meals: [] })
+      }
+      toast('Goals saved!', 'success')
+      setShowGoalsModal(false)
+    } catch {
+      toast('Failed to save goals.', 'error')
+    }
+  }
+
+  const historyByDate = useMemo(() => {
+    const groups: Record<string, typeof historyLogs> = {}
+    historyLogs.forEach(log => {
+      const day = log.consumed_at ? format(parseISO(log.consumed_at), 'yyyy-MM-dd') : 'Today'
+      if (!groups[day]) groups[day] = []
+      groups[day].push(log)
+    })
+    return Object.entries(groups).sort(([a], [b]) => b.localeCompare(a))
+  }, [historyLogs])
 
   const handleCreatePlan = async () => {
     try {
@@ -84,10 +123,13 @@ export default function MealPage() {
       <Card className="bg-slate-800 border-slate-700">
         <div className="flex justify-between items-center mb-5">
           <h2 className="text-lg font-bold text-slate-100">Today's Nutrition</h2>
-          <Button size="sm" onClick={() => setShowLogModal(true)}><Plus size={14} className="mr-1"/> Quick Add</Button>
+          <div className="flex gap-2">
+            <Button size="sm" variant="ghost" onClick={openGoalsModal}><Pencil size={14} /></Button>
+            <Button size="sm" onClick={() => setShowLogModal(true)}><Plus size={14} className="mr-1"/> Quick Add</Button>
+          </div>
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <MacroRing label="Calories" current={Math.round(dailyTotals.cals)} target={dailyTargets.cals} unit="kcal" color="#10b981" />
+          <MacroRing label="Calories" current={Math.round(dailyTotals.cals)} target={dailyTargets.cals} unit="k cal" color="#10b981" />
           <MacroRing label="Protein" current={Math.round(dailyTotals.prot)} target={dailyTargets.prot} unit="g" color="#3b82f6" />
           <MacroRing label="Carbs" current={Math.round(dailyTotals.carb)} target={dailyTargets.carb} unit="g" color="#f59e0b" />
           <MacroRing label="Fats" current={Math.round(dailyTotals.fat)} target={dailyTargets.fat} unit="g" color="#f43f5e" />
@@ -114,6 +156,40 @@ export default function MealPage() {
           />
         ))}
       </div>
+
+      {/* FOOD LOG HISTORY */}
+      {historyByDate.length > 0 && (
+        <div className="mt-8">
+          <h2 className="text-xl font-bold text-slate-100 mb-4">Food Log History</h2>
+          <div className="space-y-4">
+            {historyByDate.map(([dateKey, logs]) => {
+              const dayTotal = logs.reduce((acc, l) => ({ cals: acc.cals + l.calories, prot: acc.prot + l.protein_g, carb: acc.carb + l.carbs_g, fat: acc.fat + l.fat_g }), { cals: 0, prot: 0, carb: 0, fat: 0 })
+              const label = format(new Date(dateKey + 'T12:00:00'), 'EEEE, MMM d')
+              return (
+                <Card key={dateKey} className="bg-slate-800 border-slate-700">
+                  <div className="flex justify-between items-center mb-3">
+                    <p className="text-sm font-semibold text-slate-200">{label}</p>
+                    <p className="text-xs text-slate-500">{Math.round(dayTotal.cals)} k cal</p>
+                  </div>
+                  <div className="space-y-2">
+                    {logs.map((log, i) => (
+                      <div key={i} className="flex justify-between items-center text-xs bg-slate-900 rounded px-3 py-2">
+                        <span className="text-slate-300">{log.name}</span>
+                        <span className="text-slate-500">{log.calories} k cal · P:{log.protein_g}g · C:{log.carbs_g}g · F:{log.fat_g}g</span>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex gap-4 mt-3 pt-3 border-t border-slate-700/50 text-xs text-slate-500">
+                    <span>P: <span className="text-blue-400">{Math.round(dayTotal.prot)}g</span></span>
+                    <span>C: <span className="text-yellow-400">{Math.round(dayTotal.carb)}g</span></span>
+                    <span>F: <span className="text-rose-400">{Math.round(dayTotal.fat)}g</span></span>
+                  </div>
+                </Card>
+              )
+            })}
+          </div>
+        </div>
+      )}
 
       {/* QUICK ADD LOG MODAL */}
       <Modal isOpen={showLogModal} onClose={() => { setShowLogModal(false); setFoodSearch('') }} title="Log Food">
@@ -176,6 +252,23 @@ export default function MealPage() {
         <div className="flex gap-3 pt-4 mt-4 border-t border-slate-700">
           <Button variant="secondary" onClick={() => setShowPlanModal(false)} className="flex-1">Cancel</Button>
           <Button onClick={handleCreatePlan} className="flex-1">Save Plan</Button>
+        </div>
+      </Modal>
+
+      {/* EDIT NUTRITION GOALS MODAL */}
+      <Modal isOpen={showGoalsModal} onClose={() => setShowGoalsModal(false)} title="Daily Nutrition Goals">
+        <div className="space-y-4">
+          <p className="text-sm text-slate-400">{activePlan ? `Updates targets for "${activePlan.name}"` : 'Creates a "My Goals" plan and sets it active'}</p>
+          <Input label="Daily Calories (k cal)" type="number" min={500} value={goalsForm.target_calories} onChange={e => setGoalsForm(f => ({ ...f, target_calories: Number(e.target.value) }))} />
+          <div className="grid grid-cols-3 gap-3">
+            <Input label="Protein (g)" type="number" min={0} value={goalsForm.target_protein_g} onChange={e => setGoalsForm(f => ({ ...f, target_protein_g: Number(e.target.value) }))} />
+            <Input label="Carbs (g)" type="number" min={0} value={goalsForm.target_carbs_g} onChange={e => setGoalsForm(f => ({ ...f, target_carbs_g: Number(e.target.value) }))} />
+            <Input label="Fat (g)" type="number" min={0} value={goalsForm.target_fat_g} onChange={e => setGoalsForm(f => ({ ...f, target_fat_g: Number(e.target.value) }))} />
+          </div>
+        </div>
+        <div className="flex gap-3 pt-4 mt-4 border-t border-slate-700">
+          <Button variant="secondary" onClick={() => setShowGoalsModal(false)} className="flex-1">Cancel</Button>
+          <Button onClick={handleSaveGoals} className="flex-1">Save Goals</Button>
         </div>
       </Modal>
     </div>
