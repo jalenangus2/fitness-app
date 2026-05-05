@@ -26,7 +26,7 @@ export function useGenerateWorkout() {
 export function useUpdateWorkout() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: ({ id, data }: { id: number; data: { name?: string } }) => api.updateWorkout(id, data),
+    mutationFn: ({ id, data }: { id: number; data: { name?: string; muscle_groups?: string[] } }) => api.updateWorkout(id, data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['workouts'] }),
   })
 }

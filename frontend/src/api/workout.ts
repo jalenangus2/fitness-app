@@ -15,7 +15,7 @@ export const deleteWorkout = async (id: number): Promise<void> => {
   await client.delete(`/workouts/${id}`)
 }
 
-export const updateWorkout = async (id: number, data: { name?: string; difficulty?: string; duration_mins?: number }): Promise<WorkoutPlan> => {
+export const updateWorkout = async (id: number, data: { name?: string; difficulty?: string; duration_mins?: number; muscle_groups?: string[] }): Promise<WorkoutPlan> => {
   const res = await client.patch(`/workouts/${id}`, data)
   return res.data
 }
