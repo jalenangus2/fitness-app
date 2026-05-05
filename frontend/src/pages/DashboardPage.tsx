@@ -62,17 +62,27 @@ function WeatherCard() {
   )
 }
 
-function MacroBar({ label, value, target, color }: { label: string; value: number; target: number | null; color: string }) {
-  const pct = target ? Math.min((value / target) * 100, 100) : 0
+function NutritionRing({ value, target, color, label, unit }: { value: number; target: number | null; color: string; label: string; unit: string }) {
+  const size = 72, stroke = 7, r = (size - stroke) / 2
+  const circ = 2 * Math.PI * r
+  const pct = target ? Math.min(value / target, 1) : 0
+  const filled = circ * pct
   return (
-    <div>
-      <div className="flex justify-between text-xs text-slate-400 mb-1">
-        <span>{label}</span>
-        <span>{Math.round(value)}g {target ? `/ ${target}g` : ''}</span>
+    <div className="flex flex-col items-center gap-1">
+      <div className="relative" style={{ width: size, height: size }}>
+        <svg width={size} height={size} className="block">
+          <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#1e293b" strokeWidth={stroke} />
+          <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={color} strokeWidth={stroke}
+            strokeDasharray={`${filled} ${circ}`} strokeLinecap="round"
+            transform={`rotate(-90 ${size / 2} ${size / 2})`} style={{ transition: 'stroke-dasharray 0.5s ease' }} />
+        </svg>
+        <div className="absolute inset-0 flex flex-col items-center justify-center">
+          <span className="text-sm font-bold text-slate-100 leading-none">{Math.round(value)}</span>
+          <span className="text-[9px] text-slate-500 leading-none mt-0.5">{unit}</span>
+        </div>
       </div>
-      <div className="h-2 bg-slate-700 rounded-full overflow-hidden">
-        <div className={`h-full rounded-full transition-all ${color}`} style={{ width: `${pct}%` }} />
-      </div>
+      <span className="text-[10px] text-slate-400 font-medium">{label}</span>
+      {target && <span className="text-[9px] text-slate-600">/ {target}{unit}</span>}
     </div>
   )
 }
@@ -158,44 +168,41 @@ export default function DashboardPage() {
       {/* Stat row */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard icon={<Dumbbell size={20} className="text-indigo-400" />} label="Active Workout" value={data?.active_workout_plan?.name ?? 'None set'} sub={data?.active_workout_plan ? `${data.active_workout_plan.exercise_count} exercises` : 'Go to Workout'} onClick={() => navigate('/workout')} />
-        <StatCard icon={<UtensilsCrossed size={20} className="text-green-400" />} label="Meal Plan" value={data?.active_meal_plan?.name ?? 'None set'} sub={data?.active_meal_plan?.goal?.replace('_', ' ') ?? 'Go to Meal Plan'} onClick={() => navigate('/meal')} />
+        {/* Nutrition calorie card */}
+        <Card className="cursor-pointer hover:border-slate-600 transition-all" onClick={() => navigate('/meal')}>
+          <div className="flex items-start justify-between mb-3">
+            <div className="p-2 bg-slate-700 rounded-lg"><UtensilsCrossed size={20} className="text-green-400" /></div>
+          </div>
+          <p className="text-xs text-slate-400 mb-1">Today's Calories</p>
+          <p className="text-lg font-semibold text-slate-100">
+            {data?.nutrition_log_today?.calories ?? 0}
+            {data?.nutrition_target_calories && <span className="text-xs text-slate-500 font-normal ml-1">/ {data.nutrition_target_calories}</span>}
+          </p>
+          <div className="mt-2 h-1.5 bg-slate-700 rounded-full overflow-hidden">
+            <div className="h-full bg-green-500 rounded-full transition-all" style={{ width: `${Math.min(((data?.nutrition_log_today?.calories ?? 0) / (data?.nutrition_target_calories ?? 2000)) * 100, 100)}%` }} />
+          </div>
+        </Card>
         <StatCard icon={<ShoppingCart size={20} className="text-yellow-400" />} label="Shopping Lists" value={String(data?.shopping_list_count ?? 0)} sub="active lists" onClick={() => navigate('/shopping')} />
         <StatCard icon={<CheckSquare size={20} className="text-red-400" />} label="Open Tasks" value={String(data?.today_tasks?.length ?? 0)} sub="incomplete" onClick={() => navigate('/schedule')} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Today's Macros */}
-        {data?.active_meal_plan && (
-          <Card>
-            <h2 className="text-sm font-semibold text-slate-300 mb-4 flex items-center gap-2">
-              <UtensilsCrossed size={16} className="text-green-400" />
-              Today's Nutrition
-            </h2>
-            {data.macro_today ? (
-              <div className="space-y-3">
-                <div className="flex justify-between items-center mb-3">
-                  <span className="text-2xl font-bold text-slate-100">{data.macro_today.calories}</span>
-                  <span className="text-slate-400 text-sm">
-                    / {data.active_meal_plan.target_calories ?? '—'} kcal
-                  </span>
-                </div>
-                <MacroBar label="Protein" value={data.macro_today.protein_g} target={data.active_meal_plan.target_protein_g} color="bg-blue-500" />
-                <MacroBar label="Carbs" value={data.macro_today.carbs_g} target={data.active_meal_plan.target_carbs_g} color="bg-yellow-500" />
-                <MacroBar label="Fat" value={data.macro_today.fat_g} target={data.active_meal_plan.target_fat_g} color="bg-red-500" />
-                <div className="mt-4 space-y-2">
-                  {data.active_meal_plan.today_meals.map((m, i) => (
-                    <div key={i} className="flex justify-between text-sm">
-                      <span className="text-slate-300 capitalize">{m.meal_type}: {m.name}</span>
-                      <span className="text-slate-400">{m.calories} kcal</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ) : (
-              <p className="text-slate-400 text-sm">No meals logged for today.</p>
-            )}
-          </Card>
-        )}
+        {/* Today's Nutrition — always visible */}
+        <Card className="cursor-pointer" onClick={() => navigate('/meal')}>
+          <h2 className="text-sm font-semibold text-slate-300 mb-4 flex items-center gap-2">
+            <UtensilsCrossed size={16} className="text-green-400" />
+            Today's Nutrition
+          </h2>
+          <div className="grid grid-cols-4 gap-2 justify-items-center">
+            <NutritionRing label="Calories" value={data?.nutrition_log_today?.calories ?? 0} target={data?.nutrition_target_calories ?? null} unit="kcal" color="#10b981" />
+            <NutritionRing label="Protein" value={data?.nutrition_log_today?.protein_g ?? 0} target={data?.nutrition_target_protein_g ?? null} unit="g" color="#3b82f6" />
+            <NutritionRing label="Carbs" value={data?.nutrition_log_today?.carbs_g ?? 0} target={data?.nutrition_target_carbs_g ?? null} unit="g" color="#f59e0b" />
+            <NutritionRing label="Fat" value={data?.nutrition_log_today?.fat_g ?? 0} target={data?.nutrition_target_fat_g ?? null} unit="g" color="#f43f5e" />
+          </div>
+          {!data?.nutrition_log_today && (
+            <p className="text-xs text-slate-500 text-center mt-3">No food logged today — tap to add</p>
+          )}
+        </Card>
 
         {/* Upcoming Events */}
         <Card>

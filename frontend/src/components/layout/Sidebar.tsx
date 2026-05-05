@@ -17,7 +17,7 @@ import NotificationBell from '../ui/NotificationBell'
 const navItems = [
   { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/workout', icon: Dumbbell, label: 'Workout' },
-  { to: '/meal', icon: UtensilsCrossed, label: 'Meal Plan' },
+  { to: '/meal', icon: UtensilsCrossed, label: 'Nutrition' },
   { to: '/shopping', icon: ShoppingCart, label: 'Shopping' },
   { to: '/schedule', icon: Calendar, label: 'Schedule' },
   { to: '/fashion', icon: Shirt, label: 'Fashion' },

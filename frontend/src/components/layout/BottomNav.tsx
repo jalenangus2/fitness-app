@@ -9,7 +9,7 @@ import { cn } from '../../utils/cn'
 const PRIMARY = [
   { to: '/dashboard', icon: LayoutDashboard, label: 'Home' },
   { to: '/workout', icon: Dumbbell, label: 'Workout' },
-  { to: '/meal', icon: UtensilsCrossed, label: 'Meals' },
+  { to: '/meal', icon: UtensilsCrossed, label: 'Nutrition' },
   { to: '/schedule', icon: Calendar, label: 'Schedule' },
   { to: '/fashion', icon: Shirt, label: 'Fashion' },
 ]
