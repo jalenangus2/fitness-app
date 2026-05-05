@@ -175,7 +175,16 @@ export default function MealPage() {
                     {logs.map((log, i) => (
                       <div key={i} className="flex justify-between items-center text-xs bg-slate-900 rounded px-3 py-2">
                         <span className="text-slate-300">{log.name}</span>
-                        <span className="text-slate-500">{log.calories} k cal · P:{log.protein_g}g · C:{log.carbs_g}g · F:{log.fat_g}g</span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-slate-500">{log.calories} k cal · P:{log.protein_g}g · C:{log.carbs_g}g · F:{log.fat_g}g</span>
+                          <button
+                            onClick={() => logNutrients.mutateAsync({ name: log.name, calories: log.calories, protein_g: log.protein_g, carbs_g: log.carbs_g, fat_g: log.fat_g }).then(() => toast('Re-added!', 'success'))}
+                            className="p-1 rounded text-slate-400 hover:text-emerald-400 hover:bg-slate-700 transition-colors"
+                            title="Re-add today"
+                          >
+                            <Plus size={12} />
+                          </button>
+                        </div>
                       </div>
                     ))}
                   </div>
