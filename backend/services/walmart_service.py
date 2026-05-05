@@ -6,16 +6,16 @@ from ..config import get_settings
 
 async def search_products(query: str, limit: int = 10) -> list[dict]:
     settings = get_settings()
-    if not settings.SCRAPEHERO_API_KEY:
+    if not settings.SEARCH_API_KEY:
         raise HTTPException(
             status_code=503,
-            detail="Walmart search not configured. Add SCRAPEHERO_API_KEY to environment variables.",
+            detail="Walmart search not configured. Add SEARCH_API_KEY to environment variables.",
         )
 
     async with httpx.AsyncClient() as client:
         response = await client.get(
             "https://get.scrapehero.com/api/walmart/search/",
-            params={"x-api-key": settings.SCRAPEHERO_API_KEY, "input": query},
+            params={"x-api-key": settings.SEARCH_API_KEY, "input": query},
             timeout=20.0,
         )
 
