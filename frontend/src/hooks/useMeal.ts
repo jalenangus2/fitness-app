@@ -18,6 +18,14 @@ export function useCreateMealPlan() {
   })
 }
 
+export function useUpdateMealPlan() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, data }: { id: number; data: Parameters<typeof api.updateMealPlan>[1] }) => api.updateMealPlan(id, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['meal-plans'] }),
+  })
+}
+
 export function useGenerateMealPlan() {
   const qc = useQueryClient()
   return useMutation({
@@ -59,5 +67,12 @@ export function useSearchFoods(query: string) {
     queryKey: ['foods', query],
     queryFn: () => api.searchFoods(query),
     enabled: query.length > 2,
+  })
+}
+
+export function useNutritionHistory(days = 30) {
+  return useQuery({
+    queryKey: ['nutrition-history', days],
+    queryFn: () => api.getNutritionHistory(days),
   })
 }

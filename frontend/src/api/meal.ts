@@ -33,6 +33,9 @@ export const createMealPlan = (data: any) =>
 export const deleteMealPlan = (id: number) =>
   client.delete(`/meals/plans/${id}`)
 
+export const updateMealPlan = (id: number, data: Partial<{ name: string; goal: string; target_calories: number; target_protein_g: number; target_carbs_g: number; target_fat_g: number }>) =>
+  client.patch<MealPlan>(`/meals/plans/${id}`, data).then(r => r.data)
+
 export const activateMealPlan = (id: number) =>
   client.patch<MealPlan>(`/meals/plans/${id}/activate`).then(r => r.data)
 
@@ -47,3 +50,6 @@ export const logNutrition = (data: Omit<NutritionLog, 'id' | 'consumed_at'>) =>
 
 export const searchFoods = (q: string) =>
   client.get<FoodItem[]>('/meals/foods', { params: { q } }).then(r => r.data)
+
+export const getNutritionHistory = (days = 30) =>
+  client.get<NutritionLog[]>('/meals/logs/history', { params: { days } }).then(r => r.data)

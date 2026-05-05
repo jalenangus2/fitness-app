@@ -1,5 +1,5 @@
 """Meal plans router: CRUD + AI generation + Daily Logging."""
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
@@ -79,6 +79,16 @@ def delete_meal_plan(plan_id: int, current_user: User = Depends(get_current_user
     db.delete(plan)
     db.commit()
 
+@router.patch("/plans/{plan_id}", response_model=MealPlanResponse)
+def update_meal_plan(plan_id: int, data: MealPlanUpdate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    plan = db.query(MealPlan).filter(MealPlan.id == plan_id, MealPlan.user_id == current_user.id).first()
+    if not plan: raise HTTPException(status_code=404, detail="Meal plan not found")
+    for field, value in data.model_dump(exclude_unset=True).items():
+        setattr(plan, field, value)
+    db.commit()
+    db.refresh(plan)
+    return _serialize_meal_plan(plan)
+
 @router.patch("/plans/{plan_id}/activate", response_model=MealPlanResponse)
 def activate_meal_plan(plan_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     plan = db.query(MealPlan).filter(MealPlan.id == plan_id, MealPlan.user_id == current_user.id).first()
@@ -151,3 +161,12 @@ def log_nutrition(data: NutritionLogCreate, current_user: User = Depends(get_cur
     db.commit()
     db.refresh(log)
     return log
+
+@router.get("/logs/history", response_model=list[NutritionLogResponse])
+def get_nutrition_history(days: int = 30, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    from_dt = datetime.combine(date.today() - timedelta(days=days), datetime.min.time())
+    logs = db.query(NutritionLog).filter(
+        NutritionLog.user_id == current_user.id,
+        NutritionLog.consumed_at >= from_dt
+    ).order_by(NutritionLog.consumed_at.desc()).all()
+    return logs
