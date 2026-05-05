@@ -155,6 +155,7 @@ export default function MealPage() {
       <div className="flex items-center justify-between mt-8">
         <div>
           <h1 className="text-xl font-bold text-slate-100">Meal Plans</h1>
+          <p className="text-xs text-slate-500 mt-0.5">Plans set macro targets for the day</p>
         </div>
         <Button onClick={() => setShowPlanModal(true)} variant="secondary" size="sm"><Plus size={16} /> New Plan</Button>
       </div>

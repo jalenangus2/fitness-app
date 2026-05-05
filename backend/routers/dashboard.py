@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..models.fashion import FashionRelease
-from ..models.meal import MealPlan, Meal
+from ..models.meal import MealPlan, Meal, NutritionLog
 from ..models.schedule import Event, Task
 from ..models.shopping import ShoppingList
 from ..models.workout import WorkoutPlan
@@ -118,6 +118,11 @@ class DashboardSummary(BaseModel):
     upcoming_fashion_releases: list[FashionReleaseSummary]
     shopping_list_count: int
     macro_today: Optional[MacroToday]
+    nutrition_log_today: Optional[MacroToday]
+    nutrition_target_calories: Optional[int]
+    nutrition_target_protein_g: Optional[int]
+    nutrition_target_carbs_g: Optional[int]
+    nutrition_target_fat_g: Optional[int]
 
 
 @router.get("/summary", response_model=DashboardSummary)
@@ -260,6 +265,28 @@ def get_summary(
         ShoppingList.user_id == current_user.id
     ).count()
 
+    # Today's actual nutrition logs (independent of meal plan)
+    today_start = datetime.combine(today, datetime.min.time())
+    today_logs = db.query(NutritionLog).filter(
+        NutritionLog.user_id == current_user.id,
+        NutritionLog.consumed_at >= today_start,
+    ).all()
+
+    nutrition_log_today = None
+    if today_logs:
+        nutrition_log_today = MacroToday(
+            calories=sum(l.calories or 0 for l in today_logs),
+            protein_g=sum(l.protein_g or 0 for l in today_logs),
+            carbs_g=sum(l.carbs_g or 0 for l in today_logs),
+            fat_g=sum(l.fat_g or 0 for l in today_logs),
+        )
+
+    # Nutrition targets: active plan → user goals → None
+    nt_cal = (active_meal.target_calories if active_meal else None) or current_user.nutrition_target_calories
+    nt_pro = (active_meal.target_protein_g if active_meal else None) or current_user.nutrition_target_protein_g
+    nt_carb = (active_meal.target_carbs_g if active_meal else None) or current_user.nutrition_target_carbs_g
+    nt_fat = (active_meal.target_fat_g if active_meal else None) or current_user.nutrition_target_fat_g
+
     return DashboardSummary(
         active_workout_plan=active_workout_summary,
         active_meal_plan=active_meal_summary,
@@ -268,4 +295,9 @@ def get_summary(
         upcoming_fashion_releases=upcoming_fashion,
         shopping_list_count=shopping_count,
         macro_today=macro_today,
+        nutrition_log_today=nutrition_log_today,
+        nutrition_target_calories=nt_cal,
+        nutrition_target_protein_g=nt_pro,
+        nutrition_target_carbs_g=nt_carb,
+        nutrition_target_fat_g=nt_fat,
     )

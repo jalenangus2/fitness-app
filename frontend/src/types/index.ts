@@ -489,4 +489,14 @@ export interface DashboardSummary {
     carbs_g: number
     fat_g: number
   } | null
+  nutrition_log_today: {
+    calories: number
+    protein_g: number
+    carbs_g: number
+    fat_g: number
+  } | null
+  nutrition_target_calories: number | null
+  nutrition_target_protein_g: number | null
+  nutrition_target_carbs_g: number | null
+  nutrition_target_fat_g: number | null
 }
