@@ -14,7 +14,8 @@ def _resolve_db_url() -> str:
 
 class Settings(BaseSettings):
     ANTHROPIC_API_KEY: str = ""
-    SCRAPEHERO_API_KEY: str = ""
+    SEARCH_API_KEY: str = ""
+    BIBLE_API_KEY: str = ""
     SECRET_KEY: str = "changethissecretkeyinproduction"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 10080
     DATABASE_URL: str = ""
