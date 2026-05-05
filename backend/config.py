@@ -14,10 +14,7 @@ def _resolve_db_url() -> str:
 
 class Settings(BaseSettings):
     ANTHROPIC_API_KEY: str = ""
-    WALMART_CLIENT_ID: str = ""
-    WALMART_CLIENT_SECRET: str = ""
-    WALMART_PRIVATE_KEY_PATH: str = ""
-    WALMART_API_BASE_URL: str = "https://developer.api.walmart.com/api-proxy/service/affil/product/v2"
+    SCRAPEHERO_API_KEY: str = ""
     SECRET_KEY: str = "changethissecretkeyinproduction"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 10080
     DATABASE_URL: str = ""
