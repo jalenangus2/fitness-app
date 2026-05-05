@@ -12,6 +12,13 @@ class UserUpdate(BaseModel):
     display_name: Optional[str] = None
 
 
+class NutritionGoalsUpdate(BaseModel):
+    nutrition_target_calories: Optional[int] = None
+    nutrition_target_protein_g: Optional[int] = None
+    nutrition_target_carbs_g: Optional[int] = None
+    nutrition_target_fat_g: Optional[int] = None
+
+
 class UserResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -19,6 +26,10 @@ class UserResponse(BaseModel):
     email: str
     username: str
     display_name: Optional[str] = None
+    nutrition_target_calories: Optional[int] = None
+    nutrition_target_protein_g: Optional[int] = None
+    nutrition_target_carbs_g: Optional[int] = None
+    nutrition_target_fat_g: Optional[int] = None
 
 
 class Token(BaseModel):

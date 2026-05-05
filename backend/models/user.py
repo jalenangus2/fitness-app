@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Optional
 from sqlalchemy import Integer, String, DateTime
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from ..database import Base
@@ -14,6 +15,11 @@ class User(Base):
     hashed_password: Mapped[str] = mapped_column(String, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    nutrition_target_calories: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    nutrition_target_protein_g: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    nutrition_target_carbs_g: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    nutrition_target_fat_g: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
     workout_plans = relationship("WorkoutPlan", back_populates="user", cascade="all, delete-orphan")
     meal_plans = relationship("MealPlan", back_populates="user", cascade="all, delete-orphan")

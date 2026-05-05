@@ -117,7 +117,7 @@ function ListDetail({ listId }: { listId: number }) {
   const addItem = useAddShoppingItem(listId)
   const updateItem = useUpdateShoppingItem(listId)
   const deleteItem = useDeleteShoppingItem(listId)
-  const walmartSearch = useWalmartSearch(listId, 0)
+  const walmartSearch = useWalmartSearch(listId)
   const walmartSelect = useWalmartSelect(listId)
   const { toast } = useToast()
   const [newItem, setNewItem] = useState({ ingredient_name: '', quantity: '', category: 'produce' })
@@ -134,11 +134,10 @@ function ListDetail({ listId }: { listId: number }) {
     setSearchDrawer({ item })
     setWalmartResults([])
     try {
-      const search = useWalmartSearch(listId, item.id)
-      const results = await walmartSearch.mutateAsync()
+      const results = await walmartSearch.mutateAsync(item.id)
       setWalmartResults(results)
     } catch {
-      toast('Walmart search unavailable. Check API credentials.', 'error')
+      toast('Walmart search failed. Check API credentials.', 'error')
     }
   }
 
