@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react'
 import { format, parseISO } from 'date-fns'
 import { Plus, Zap, CheckCircle, Trash2, ChevronDown, ShoppingCart, Search, Pencil } from 'lucide-react'
-import { useMealPlans, useCreateMealPlan, useUpdateMealPlan, useActivateMealPlan, useDeleteMealPlan, useDailyNutrition, useLogNutrition, useSearchFoods, useNutritionHistory } from '../hooks/useMeal'
+import { useMealPlans, useCreateMealPlan, useUpdateMealPlan, useActivateMealPlan, useDeleteMealPlan, useDailyNutrition, useLogNutrition, useSearchFoods, useNutritionHistory, useCurrentUser, useUpdateNutritionGoals } from '../hooks/useMeal'
 import { useCreateShoppingList } from '../hooks/useShopping'
 import { useToast } from '../components/ui/Toast'
 import Card from '../components/ui/Card'
@@ -18,8 +18,10 @@ const GOAL_COLORS: Record<string, 'green' | 'blue' | 'yellow' | 'red' | 'indigo'
 export default function MealPage() {
   const { data: plans = [], isLoading } = useMealPlans()
   const { data: logs = [] } = useDailyNutrition()
+  const { data: currentUser } = useCurrentUser()
   const createManual = useCreateMealPlan()
   const updatePlan = useUpdateMealPlan()
+  const updateGoals = useUpdateNutritionGoals()
   const activate = useActivateMealPlan()
   const remove = useDeleteMealPlan()
   const createList = useCreateShoppingList()
@@ -42,14 +44,22 @@ export default function MealPage() {
   const { data: foodResults = [] } = useSearchFoods(foodSearch)
 
   const activePlan = plans.find(p => p.is_active)
-  
-  // Macro Calculations
-  const dailyTargets = useMemo(() => activePlan ? {
-    cals: activePlan.target_calories || 2000,
-    prot: activePlan.target_protein_g || 150,
-    carb: activePlan.target_carbs_g || 200,
-    fat: activePlan.target_fat_g || 65
-  } : { cals: 2000, prot: 150, carb: 200, fat: 65 }, [activePlan])
+
+  // Macro Calculations — prefer active plan, then user goals, then defaults
+  const dailyTargets = useMemo(() => {
+    if (activePlan) return {
+      cals: activePlan.target_calories || 2000,
+      prot: activePlan.target_protein_g || 150,
+      carb: activePlan.target_carbs_g || 200,
+      fat: activePlan.target_fat_g || 65,
+    }
+    return {
+      cals: currentUser?.nutrition_target_calories ?? 2000,
+      prot: currentUser?.nutrition_target_protein_g ?? 150,
+      carb: currentUser?.nutrition_target_carbs_g ?? 200,
+      fat: currentUser?.nutrition_target_fat_g ?? 65,
+    }
+  }, [activePlan, currentUser])
 
   const dailyTotals = useMemo(() => logs.reduce((acc, log) => ({
     cals: acc.cals + log.calories,
@@ -73,7 +83,12 @@ export default function MealPage() {
       if (activePlan) {
         await updatePlan.mutateAsync({ id: activePlan.id!, data: goalsForm })
       } else {
-        await createManual.mutateAsync({ name: 'My Goals', goal: 'maintenance', ...goalsForm, duration_days: 365, is_ai_generated: false, meals: [] })
+        await updateGoals.mutateAsync({
+          nutrition_target_calories: goalsForm.target_calories,
+          nutrition_target_protein_g: goalsForm.target_protein_g,
+          nutrition_target_carbs_g: goalsForm.target_carbs_g,
+          nutrition_target_fat_g: goalsForm.target_fat_g,
+        })
       }
       toast('Goals saved!', 'success')
       setShowGoalsModal(false)

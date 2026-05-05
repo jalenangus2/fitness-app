@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 from ..config import get_settings
 from ..database import get_db
 from ..models.user import User
-from ..schemas.auth import Token, UserCreate, UserResponse, UserUpdate
+from ..schemas.auth import Token, UserCreate, UserResponse, UserUpdate, NutritionGoalsUpdate
 
 ALGORITHM = "HS256"
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/token")
@@ -96,6 +96,15 @@ def get_me(current_user: User = Depends(get_current_user)):
 def update_me(data: UserUpdate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     if data.display_name is not None:
         current_user.display_name = data.display_name.strip() or None
+    db.commit()
+    db.refresh(current_user)
+    return current_user
+
+
+@router.patch("/me/goals", response_model=UserResponse)
+def update_nutrition_goals(data: NutritionGoalsUpdate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    for field, value in data.model_dump(exclude_unset=True).items():
+        setattr(current_user, field, value)
     db.commit()
     db.refresh(current_user)
     return current_user

@@ -51,9 +51,9 @@ export function useDeleteShoppingItem(listId: number) {
   })
 }
 
-export function useWalmartSearch(listId: number, itemId: number) {
+export function useWalmartSearch(listId: number) {
   return useMutation({
-    mutationFn: () => api.walmartSearch(listId, itemId),
+    mutationFn: (itemId: number) => api.walmartSearch(listId, itemId),
   })
 }
 

@@ -22,6 +22,10 @@ def _run_migrations() -> None:
             "ALTER TABLE workout_exercises ADD COLUMN IF NOT EXISTS weight_lbs REAL",
             "ALTER TABLE workout_exercises ADD COLUMN IF NOT EXISTS duration_secs INTEGER",
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS display_name TEXT",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS nutrition_target_calories INTEGER",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS nutrition_target_protein_g INTEGER",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS nutrition_target_carbs_g INTEGER",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS nutrition_target_fat_g INTEGER",
         ]
         with engine.connect() as conn:
             for sql in stmts:
@@ -35,6 +39,10 @@ def _run_migrations() -> None:
             "ALTER TABLE workout_exercises ADD COLUMN weight_lbs REAL",
             "ALTER TABLE workout_exercises ADD COLUMN duration_secs INTEGER",
             "ALTER TABLE users ADD COLUMN display_name TEXT",
+            "ALTER TABLE users ADD COLUMN nutrition_target_calories INTEGER",
+            "ALTER TABLE users ADD COLUMN nutrition_target_protein_g INTEGER",
+            "ALTER TABLE users ADD COLUMN nutrition_target_carbs_g INTEGER",
+            "ALTER TABLE users ADD COLUMN nutrition_target_fat_g INTEGER",
         ]
         with engine.connect() as conn:
             for sql in stmts:
