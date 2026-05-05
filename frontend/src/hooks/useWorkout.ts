@@ -39,6 +39,22 @@ export function useActivateWorkout() {
   })
 }
 
+export function useDeactivateWorkout() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: number) => api.deactivateWorkout(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['workouts'] }),
+  })
+}
+
+export function useReplaceExercises() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, exercises }: { id: number; exercises: any[] }) => api.replaceExercises(id, exercises),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['workouts'] }),
+  })
+}
+
 export function useDeleteWorkout() {
   const qc = useQueryClient()
   return useMutation({

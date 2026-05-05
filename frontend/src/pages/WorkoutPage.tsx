@@ -1,9 +1,9 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { format, parseISO } from 'date-fns'
-import { Plus, Zap, CheckCircle, Trash2, ChevronDown, Play, Timer, X, Minus, BarChart2, Dumbbell, ClipboardList, Pencil, Check } from 'lucide-react'
+import { Plus, Zap, CheckCircle, Trash2, ChevronDown, Play, Timer, X, Minus, BarChart2, Dumbbell, ClipboardList, Pencil, Check, TrendingUp } from 'lucide-react'
 import {
-  useWorkouts, useCreateWorkout, useActivateWorkout, useUpdateWorkout,
-  useDeleteWorkout, useStartSession, useLogSet, useFinishSession,
+  useWorkouts, useCreateWorkout, useActivateWorkout, useDeactivateWorkout, useUpdateWorkout,
+  useReplaceExercises, useDeleteWorkout, useStartSession, useLogSet, useFinishSession,
   useWorkoutSessions, useDeleteSession,
 } from '../hooks/useWorkout'
 import { useToast } from '../components/ui/Toast'
@@ -28,6 +28,8 @@ export default function WorkoutPage() {
 
   const createManual = useCreateWorkout()
   const activate = useActivateWorkout()
+  const deactivate = useDeactivateWorkout()
+  const replaceExercises = useReplaceExercises()
   const updatePlan = useUpdateWorkout()
   const remove = useDeleteWorkout()
   const startSession = useStartSession()
@@ -46,6 +48,11 @@ export default function WorkoutPage() {
 
   const [activeSession, setActiveSession] = useState<{ id: number; plan: WorkoutPlan; startedAt: number } | null>(null)
   const [restTimer, setRestTimer] = useState(0)
+
+  const [editingPlan, setEditingPlan] = useState<WorkoutPlan | null>(null)
+  const [editExercises, setEditExercises] = useState<Partial<WorkoutExercise>[]>([])
+  const [showPushModal, setShowPushModal] = useState(false)
+  const [pushCount, setPushCount] = useState(20)
 
   const [form, setForm] = useState({ name: '', muscle_groups: [] as string[], difficulty: 'intermediate', duration_mins: 45, notes: '' })
   const [manualExercises, setManualExercises] = useState<Partial<WorkoutExercise>[]>([])
@@ -174,14 +181,58 @@ export default function WorkoutPage() {
     }
   }
 
+  const handleSaveEditedPlan = async () => {
+    if (!editingPlan) return
+    await replaceExercises.mutateAsync({ id: editingPlan.id!, exercises: editExercises as any[] })
+    toast('Plan updated!', 'success')
+    setEditingPlan(null)
+  }
+
   const updateLogExercise = (i: number, field: keyof LogExercise, value: string | number) => {
     setLogExercises(prev => prev.map((ex, idx) => idx === i ? { ...ex, [field]: value } : ex))
+  }
+
+  const handlePushLog = async () => {
+    if (pushCount <= 0) return toast('Enter a push-up count', 'error')
+    try {
+      await startSession.mutateAsync({
+        name: `Push-ups — ${format(new Date(), 'MMM d')}`,
+        session_date: today as any,
+        set_logs: [{ exercise_name: 'Push-ups', set_number: 1, reps: pushCount, weight_lbs: 0 }],
+      } as any)
+      toast(`${pushCount} push-ups logged!`, 'success')
+      setShowPushModal(false)
+      setPushCount(20)
+      setActiveTab('history')
+    } catch {
+      toast('Failed to log. Please try again.', 'error')
+    }
   }
 
   // Stats
   const totalSessions = sessions.length
   const totalSets = sessions.reduce((a, s) => a + s.set_logs.length, 0)
   const totalVolume = sessions.reduce((a, s) => a + s.set_logs.reduce((b, l) => b + (l.reps ?? 0) * (l.weight_lbs ?? 0), 0), 0)
+
+  const now = Date.now()
+  const MS_DAY = 86400000
+  const last7 = sessions.filter(s => now - parseISO(s.session_date).getTime() <= 7 * MS_DAY)
+  const last30 = sessions.filter(s => now - parseISO(s.session_date).getTime() <= 30 * MS_DAY)
+
+  const muscleGroupStats = useMemo(() => {
+    const counts: Record<string, number> = {}
+    sessions.forEach(s => {
+      const plan = plans.find(p => p.id === s.plan_id)
+      if (plan) plan.muscle_groups.forEach(mg => { counts[mg] = (counts[mg] || 0) + 1 })
+    })
+    return Object.entries(counts).sort((a, b) => b[1] - a[1])
+  }, [sessions, plans])
+
+  const topExercises = useMemo(() => {
+    const counts: Record<string, number> = {}
+    sessions.forEach(s => s.set_logs.forEach(l => { counts[l.exercise_name] = (counts[l.exercise_name] || 0) + 1 }))
+    return Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 5)
+  }, [sessions])
 
   // Active workout full-screen view
   if (activeSession) {
@@ -246,6 +297,12 @@ export default function WorkoutPage() {
       {/* Plans tab */}
       {activeTab === 'plans' && (
         <div className="space-y-4">
+          <button
+            onClick={() => setShowPushModal(true)}
+            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border border-dashed border-slate-600 text-slate-400 hover:border-indigo-500 hover:text-indigo-400 transition-colors text-sm font-medium"
+          >
+            <Plus size={15} /> Log Push-ups
+          </button>
           {plans.length === 0 && (
             <Card className="text-center py-10">
               <Dumbbell size={32} className="mx-auto text-slate-600 mb-3" />
@@ -258,8 +315,10 @@ export default function WorkoutPage() {
               key={plan.id} plan={plan} expanded={expandedId === plan.id}
               onToggle={() => setExpandedId(expandedId === plan.id ? null : plan.id)}
               onActivate={() => activate.mutateAsync(plan.id!)}
+              onDeactivate={() => deactivate.mutateAsync(plan.id!).then(() => toast('Plan deactivated.', 'info'))}
               onDelete={() => remove.mutateAsync(plan.id!)}
               onStart={() => handleStartWorkout(plan)}
+              onEdit={() => { setEditingPlan(plan); setEditExercises(plan.exercises.map(ex => ({ ...ex }))) }}
               onRename={(name: string) => updatePlan.mutateAsync({ id: plan.id!, data: { name } }).then(() => toast('Plan renamed!', 'success'))}
             />
           ))}
@@ -269,6 +328,7 @@ export default function WorkoutPage() {
       {/* History tab */}
       {activeTab === 'history' && (
         <div className="space-y-4">
+          {/* All-time stats */}
           <div className="grid grid-cols-3 gap-3">
             <Card className="text-center py-3">
               <p className="text-2xl font-bold text-indigo-400">{totalSessions}</p>
@@ -283,6 +343,61 @@ export default function WorkoutPage() {
               <p className="text-xs text-slate-400 mt-0.5">Vol (lbs)</p>
             </Card>
           </div>
+
+          {/* Weekly / Monthly recap */}
+          {sessions.length > 0 && (
+            <Card className="bg-slate-800 border-slate-700">
+              <div className="flex items-center gap-2 mb-3">
+                <TrendingUp size={15} className="text-indigo-400" />
+                <h3 className="text-sm font-semibold text-slate-200">Recaps</h3>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="bg-slate-900 rounded-lg p-3">
+                  <p className="text-xs text-slate-500 uppercase tracking-wider mb-2">Last 7 Days</p>
+                  <p className="text-xl font-bold text-indigo-400">{last7.length} <span className="text-xs text-slate-500 font-normal">sessions</span></p>
+                  <p className="text-xs text-slate-400 mt-1">{last7.reduce((a, s) => a + s.set_logs.length, 0)} sets · {last7.reduce((a, s) => a + s.set_logs.reduce((b, l) => b + (l.reps ?? 0) * (l.weight_lbs ?? 0), 0), 0).toLocaleString()} lbs</p>
+                </div>
+                <div className="bg-slate-900 rounded-lg p-3">
+                  <p className="text-xs text-slate-500 uppercase tracking-wider mb-2">Last 30 Days</p>
+                  <p className="text-xl font-bold text-emerald-400">{last30.length} <span className="text-xs text-slate-500 font-normal">sessions</span></p>
+                  <p className="text-xs text-slate-400 mt-1">{last30.reduce((a, s) => a + s.set_logs.length, 0)} sets · {last30.reduce((a, s) => a + s.set_logs.reduce((b, l) => b + (l.reps ?? 0) * (l.weight_lbs ?? 0), 0), 0).toLocaleString()} lbs</p>
+                </div>
+              </div>
+            </Card>
+          )}
+
+          {/* Muscle group frequency */}
+          {(muscleGroupStats.length > 0 || topExercises.length > 0) && (
+            <Card className="bg-slate-800 border-slate-700">
+              <h3 className="text-sm font-semibold text-slate-200 mb-3">Muscles Worked</h3>
+              {muscleGroupStats.length > 0 ? (
+                <div className="space-y-2">
+                  {muscleGroupStats.map(([group, count]) => {
+                    const max = muscleGroupStats[0][1]
+                    return (
+                      <div key={group} className="flex items-center gap-2">
+                        <span className="text-xs text-slate-300 w-24 capitalize shrink-0">{group}</span>
+                        <div className="flex-1 bg-slate-700 rounded-full h-2">
+                          <div className="bg-indigo-500 h-2 rounded-full transition-all" style={{ width: `${(count / max) * 100}%` }} />
+                        </div>
+                        <span className="text-xs text-slate-500 w-8 text-right">{count}x</span>
+                      </div>
+                    )
+                  })}
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <p className="text-xs text-slate-500 mb-2">Top exercises by set count</p>
+                  {topExercises.map(([name, count]) => (
+                    <div key={name} className="flex items-center justify-between text-xs">
+                      <span className="text-slate-300">{name}</span>
+                      <span className="text-slate-500">{count} sets</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </Card>
+          )}
 
           {sessions.length === 0 && (
             <Card className="text-center py-10">
@@ -468,13 +583,70 @@ export default function WorkoutPage() {
         </div>
       </Modal>
 
+      {/* Edit exercises modal */}
+      <Modal isOpen={!!editingPlan} onClose={() => setEditingPlan(null)} title={`Edit — ${editingPlan?.name}`} size="lg">
+        <div className="space-y-3 max-h-[55vh] overflow-y-auto px-1">
+          <div className="grid grid-cols-[1fr_44px_28px_44px_60px_28px] gap-1.5 text-xs text-slate-500 px-1">
+            <span>Exercise</span><span>Sets</span><span></span><span>Reps/s</span><span>Wt</span><span />
+          </div>
+          {editExercises.map((ex, i) => {
+            const isTimed = ex.duration_secs !== undefined && ex.duration_secs !== null
+            return (
+              <div key={i} className="grid grid-cols-[1fr_44px_28px_44px_60px_28px] gap-1.5 items-center bg-slate-800 p-2 rounded">
+                <Input value={ex.name || ''} onChange={e => { const nm = [...editExercises]; nm[i] = { ...nm[i], name: e.target.value }; setEditExercises(nm) }} placeholder="e.g. Bench Press" />
+                <Input type="number" value={ex.sets || ''} onChange={e => { const nm = [...editExercises]; nm[i] = { ...nm[i], sets: Number(e.target.value) }; setEditExercises(nm) }} placeholder="3" />
+                <button
+                  title={isTimed ? 'Switch to reps' : 'Switch to seconds'}
+                  onClick={() => { const nm = [...editExercises]; nm[i] = isTimed ? { ...nm[i], duration_secs: undefined, reps: '10' } : { ...nm[i], duration_secs: 45, reps: undefined }; setEditExercises(nm) }}
+                  className={`flex items-center justify-center rounded p-1 ${isTimed ? 'text-indigo-400 bg-indigo-500/20' : 'text-slate-500 hover:text-slate-300'}`}
+                ><Timer size={15} /></button>
+                {isTimed
+                  ? <Input type="number" value={ex.duration_secs ?? ''} onChange={e => { const nm = [...editExercises]; nm[i] = { ...nm[i], duration_secs: e.target.value ? Number(e.target.value) : undefined }; setEditExercises(nm) }} placeholder="45" />
+                  : <Input value={ex.reps || ''} onChange={e => { const nm = [...editExercises]; nm[i] = { ...nm[i], reps: e.target.value }; setEditExercises(nm) }} placeholder="10" />
+                }
+                <Input type="number" value={ex.weight_lbs ?? ''} onChange={e => { const nm = [...editExercises]; nm[i] = { ...nm[i], weight_lbs: e.target.value ? Number(e.target.value) : undefined }; setEditExercises(nm) }} placeholder="0" />
+                <button onClick={() => setEditExercises(editExercises.filter((_, idx) => idx !== i))} className="p-2 text-red-400"><X size={16} /></button>
+              </div>
+            )
+          })}
+          <button onClick={() => setEditExercises([...editExercises, { name: '', sets: 3, reps: '10' }])} className="w-full text-center text-indigo-400 text-xs py-2 border border-dashed border-slate-700 rounded hover:border-indigo-500 transition-colors">
+            <Plus size={12} className="inline mr-1" /> Add Exercise
+          </button>
+        </div>
+        <div className="flex gap-3 pt-4 mt-4 border-t border-slate-700">
+          <Button variant="secondary" onClick={() => setEditingPlan(null)} className="flex-1">Cancel</Button>
+          <Button onClick={handleSaveEditedPlan} className="flex-1">Save Changes</Button>
+        </div>
+      </Modal>
+
+      {/* Quick log push-ups modal */}
+      <Modal isOpen={showPushModal} onClose={() => setShowPushModal(false)} title="Log Push-ups">
+        <div className="space-y-4">
+          <p className="text-sm text-slate-400">How many push-ups did you do in this set?</p>
+          <div className="flex items-center justify-center gap-4">
+            <button onClick={() => setPushCount(c => Math.max(1, c - 5))} className="bg-slate-700 p-4 rounded-xl text-lg active:bg-slate-600"><Minus size={20} /></button>
+            <input
+              type="number" min="1" value={pushCount}
+              onChange={e => setPushCount(Math.max(1, Number(e.target.value)))}
+              className="text-5xl font-bold w-28 text-center bg-transparent text-slate-100 focus:outline-none"
+            />
+            <button onClick={() => setPushCount(c => c + 5)} className="bg-slate-700 p-4 rounded-xl text-lg active:bg-slate-600"><Plus size={20} /></button>
+          </div>
+          <p className="text-center text-xs text-slate-500">Quick-logging keeps you accountable through the day</p>
+        </div>
+        <div className="flex gap-3 pt-4 mt-4 border-t border-slate-700">
+          <Button variant="secondary" onClick={() => setShowPushModal(false)} className="flex-1">Cancel</Button>
+          <Button onClick={handlePushLog} className="flex-1"><CheckCircle size={16} className="mr-1" /> Log {pushCount} Push-ups</Button>
+        </div>
+      </Modal>
+
     </div>
   )
 }
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
-function WorkoutPlanCard({ plan, expanded, onToggle, onActivate, onDelete, onStart, onRename }: any) {
+function WorkoutPlanCard({ plan, expanded, onToggle, onActivate, onDeactivate, onDelete, onStart, onEdit, onRename }: any) {
   const [editing, setEditing] = useState(false)
   const [editName, setEditName] = useState(plan.name)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -544,6 +716,8 @@ function WorkoutPlanCard({ plan, expanded, onToggle, onActivate, onDelete, onSta
           ))}
           <div className="flex gap-2 pt-2">
             {!plan.is_active && <Button variant="secondary" size="sm" onClick={onActivate} className="flex-1">Set Active</Button>}
+            {plan.is_active && <Button variant="ghost" size="sm" onClick={onDeactivate} className="flex-1 text-slate-400">Deactivate</Button>}
+            <Button variant="ghost" size="sm" onClick={onEdit} className="text-indigo-400 bg-indigo-500/10 flex-none px-3"><Pencil size={14} /></Button>
             <Button variant="ghost" size="sm" onClick={onDelete} className="text-red-400 bg-red-500/10 flex-none px-3"><Trash2 size={16} /></Button>
           </div>
         </div>
