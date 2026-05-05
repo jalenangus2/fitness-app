@@ -76,6 +76,7 @@ def update_workout_plan(plan_id: int, data: WorkoutPlanUpdate, current_user: Use
     plan = db.query(WorkoutPlan).filter(WorkoutPlan.id == plan_id, WorkoutPlan.user_id == current_user.id).first()
     if not plan: raise HTTPException(status_code=404, detail="Plan not found")
     if data.name is not None: plan.name = data.name.strip()
+    if data.muscle_groups is not None: plan.muscle_groups = json.dumps(data.muscle_groups)
     if data.difficulty is not None: plan.difficulty = data.difficulty
     if data.duration_mins is not None: plan.duration_mins = data.duration_mins
     db.commit()
