@@ -19,6 +19,15 @@ const CATEGORY_OPTIONS = [
   { value: 'other', label: 'Other' },
 ]
 
+const RECURRENCE_OPTIONS = [
+  { value: 'none', label: 'No recurrence' },
+  { value: 'weekly', label: 'Weekly' },
+  { value: 'biweekly', label: 'Every 2 weeks' },
+  { value: 'monthly', label: 'Monthly (~4 weeks)' },
+]
+
+const RECURRENCE_DAYS: Record<string, number> = { weekly: 7, biweekly: 14, monthly: 28 }
+
 const CATEGORY_FILTERS = ['All', 'Sneakers', 'Clothing', 'Accessories', 'Other']
 
 function CountdownBadge({ releaseDate }: { releaseDate: string }) {
@@ -49,6 +58,7 @@ export default function FashionPage() {
   const [form, setForm] = useState({
     brand: '', name: '', category: 'sneakers', release_date: '',
     price_cents: '' as string | number, colorway: '', sku: '', image_url: '', retailer_url: '', notes: '',
+    recurrence: 'none', occurrences: 4,
   })
 
   const handleCreate = async () => {
@@ -56,13 +66,25 @@ export default function FashionPage() {
       toast('Brand, name, and release date are required.', 'error')
       return
     }
-    await createRelease.mutateAsync({
-      ...form,
+    const base = {
+      brand: form.brand, name: form.name, category: form.category,
+      colorway: form.colorway, sku: form.sku, image_url: form.image_url,
+      retailer_url: form.retailer_url, notes: form.notes,
       price_cents: form.price_cents ? Math.round(Number(form.price_cents) * 100) : undefined,
-    })
-    toast('Release added!', 'success')
+    }
+    const count = form.recurrence !== 'none' ? form.occurrences : 1
+    const intervalDays = RECURRENCE_DAYS[form.recurrence] ?? 0
+    const startDate = new Date(form.release_date + 'T12:00:00')
+    for (let i = 0; i < count; i++) {
+      const d = new Date(startDate)
+      d.setDate(d.getDate() + i * intervalDays)
+      const dateStr = d.toISOString().split('T')[0]
+      const nameSuffix = count > 1 ? ` (Drop ${i + 1})` : ''
+      await createRelease.mutateAsync({ ...base, release_date: dateStr, name: base.name + nameSuffix })
+    }
+    toast(count > 1 ? `${count} recurring drops added!` : 'Release added!', 'success')
     setShowModal(false)
-    setForm({ brand: '', name: '', category: 'sneakers', release_date: '', price_cents: '', colorway: '', sku: '', image_url: '', retailer_url: '', notes: '' })
+    setForm({ brand: '', name: '', category: 'sneakers', release_date: '', price_cents: '', colorway: '', sku: '', image_url: '', retailer_url: '', notes: '', recurrence: 'none', occurrences: 4 })
   }
 
   const handleToggleAlert = async (release: FashionRelease) => {
@@ -149,9 +171,23 @@ export default function FashionPage() {
           </div>
           <Input label="Retailer URL" value={form.retailer_url} onChange={(e) => setForm({ ...form, retailer_url: e.target.value })} placeholder="https://www.nike.com/..." />
           <Input label="Notes" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder="Limited release, size run true to size" />
+          <div className="border-t border-slate-700 pt-4 space-y-3">
+            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Recurring Drop Series</p>
+            <div className="grid grid-cols-2 gap-4">
+              <Select label="Recurrence" options={RECURRENCE_OPTIONS} value={form.recurrence} onChange={e => setForm({ ...form, recurrence: e.target.value })} />
+              {form.recurrence !== 'none' && (
+                <Input label="# of Drops" type="number" min={2} max={52} value={form.occurrences} onChange={e => setForm({ ...form, occurrences: Number(e.target.value) })} />
+              )}
+            </div>
+            {form.recurrence !== 'none' && (
+              <p className="text-xs text-slate-500">Creates {form.occurrences} releases starting {form.release_date || '...'}, {form.recurrence === 'weekly' ? 'every 7 days' : form.recurrence === 'biweekly' ? 'every 14 days' : 'every 28 days'}.</p>
+            )}
+          </div>
           <div className="flex gap-3 pt-2">
             <Button variant="secondary" onClick={() => setShowModal(false)} className="flex-1">Cancel</Button>
-            <Button onClick={handleCreate} loading={createRelease.isPending} className="flex-1">Add Release</Button>
+            <Button onClick={handleCreate} loading={createRelease.isPending} className="flex-1">
+              {form.recurrence !== 'none' ? `Add ${form.occurrences} Drops` : 'Add Release'}
+            </Button>
           </div>
         </div>
       </Modal>
