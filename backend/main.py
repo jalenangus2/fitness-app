@@ -3,6 +3,8 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi import FastAPI
+from services.push_service import initialize_firebase, send_push_notification
 
 from .database import engine, Base
 from .routers import auth, workout, meal, shopping, schedule, fashion, dashboard, finance, tracking, notifications
@@ -91,3 +93,20 @@ app.include_router(notifications.router, prefix="/api/v1/notifications", tags=["
 @app.get("/api/v1/health")
 def health():
     return {"status": "ok"}
+
+app = FastAPI()
+
+@app.on_event("startup")
+async def startup_event():
+    # Initialize the Firebase service
+    initialize_firebase()
+
+# A temporary test route
+@app.post("/test-push")
+async def test_push(token: str):
+    result = send_push_notification(
+        device_token=token,
+        title="Workout Complete! 🏋️‍♂️",
+        body="Great job crushing your session today."
+    )
+    return result
