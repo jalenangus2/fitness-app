@@ -1,13 +1,18 @@
 import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Dumbbell, UtensilsCrossed, ShoppingCart, Calendar, CheckSquare, Shirt, Sun, CloudSun, Cloud, CloudRain, CloudSnow, CloudLightning, Wind, MapPin, Pencil, Check, X } from 'lucide-react'
+import { Dumbbell, UtensilsCrossed, ShoppingCart, Calendar, CheckSquare, Shirt, Sun, CloudSun, Cloud, CloudRain, CloudSnow, CloudLightning, Wind, MapPin, Pencil, Check, X, Bell } from 'lucide-react'
 import { useDashboard, useWeather, useDailyVerse } from '../hooks/useDashboard'
 import Card from '../components/ui/Card'
 import Badge from '../components/ui/Badge'
 import Spinner from '../components/ui/Spinner'
+import Button from '../components/ui/Button'
 import { formatDate, daysUntil } from '../utils/date'
 import { useAuthStore } from '../store/authStore'
 import { updateMe } from '../api/auth'
+
+// Firebase & Notifications Imports
+import { requestForToken } from '../utils/firebase'
+import { useToast } from '../components/ui/Toast'
 
 function weatherIcon(code: number) {
   if (code === 0) return <Sun size={36} className="text-yellow-400" />
@@ -85,6 +90,8 @@ export default function DashboardPage() {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
+  
+  const { toast } = useToast()
 
   useEffect(() => {
     if (editing) {
@@ -102,6 +109,20 @@ export default function DashboardPage() {
     setEditing(false)
   }
 
+  // Handle Firebase Token Request
+  const handleEnableNotifications = async () => {
+    try {
+      const token = await requestForToken()
+      if (token) {
+        toast('Notifications enabled! Check console for token.', 'success')
+      } else {
+        toast('Notification permission denied.', 'error')
+      }
+    } catch (error) {
+      toast('Error setting up notifications.', 'error')
+    }
+  }
+
   const displayName = user?.display_name || user?.username
 
   if (isLoading) return (
@@ -112,32 +133,46 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-5 pb-2">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-100 flex items-center gap-2 flex-wrap">
-          Good {getGreeting()},{' '}
-          {editing ? (
-            <span className="flex items-center gap-1">
-              <input
-                ref={inputRef}
-                value={draft}
-                onChange={e => setDraft(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter') saveDisplayName(); if (e.key === 'Escape') setEditing(false) }}
-                className="bg-slate-700 border border-indigo-500 rounded-lg px-2 py-0.5 text-xl font-bold text-slate-100 focus:outline-none w-40"
-                placeholder={user?.username}
-              />
-              <button onClick={saveDisplayName} className="text-emerald-400 hover:text-emerald-300 p-1"><Check size={18} /></button>
-              <button onClick={() => setEditing(false)} className="text-slate-500 hover:text-slate-300 p-1"><X size={18} /></button>
-            </span>
-          ) : (
-            <span className="flex items-center gap-1.5">
-              {displayName} 👋
-              <button onClick={() => setEditing(true)} className="text-slate-500 hover:text-slate-300 transition-colors" title="Edit display name">
-                <Pencil size={14} />
-              </button>
-            </span>
-          )}
-        </h1>
-        <p className="text-slate-400 mt-1">Here's your life at a glance.</p>
+      {/* Header Container */}
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-100 flex items-center gap-2 flex-wrap">
+            Good {getGreeting()},{' '}
+            {editing ? (
+              <span className="flex items-center gap-1">
+                <input
+                  ref={inputRef}
+                  value={draft}
+                  onChange={e => setDraft(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') saveDisplayName(); if (e.key === 'Escape') setEditing(false) }}
+                  className="bg-slate-700 border border-indigo-500 rounded-lg px-2 py-0.5 text-xl font-bold text-slate-100 focus:outline-none w-40"
+                  placeholder={user?.username}
+                />
+                <button onClick={saveDisplayName} className="text-emerald-400 hover:text-emerald-300 p-1"><Check size={18} /></button>
+                <button onClick={() => setEditing(false)} className="text-slate-500 hover:text-slate-300 p-1"><X size={18} /></button>
+              </span>
+            ) : (
+              <span className="flex items-center gap-1.5">
+                {displayName} 👋
+                <button onClick={() => setEditing(true)} className="text-slate-500 hover:text-slate-300 transition-colors" title="Edit display name">
+                  <Pencil size={14} />
+                </button>
+              </span>
+            )}
+          </h1>
+          <p className="text-slate-400 mt-1">Here's your life at a glance.</p>
+        </div>
+        
+        {/* New Notification Button */}
+        <Button 
+          variant="secondary" 
+          size="sm" 
+          onClick={handleEnableNotifications} 
+          className="flex items-center gap-2 bg-indigo-600/20 text-indigo-300 hover:bg-indigo-600/30 border border-indigo-500/30 flex-shrink-0"
+        >
+          <Bell size={16} />
+          <span className="hidden sm:inline">Enable Push</span>
+        </Button>
       </div>
 
       <WeatherCard />
@@ -183,7 +218,7 @@ export default function DashboardPage() {
                 <MacroBar label="Carbs" value={data.macro_today.carbs_g} target={data.active_meal_plan.target_carbs_g} color="bg-yellow-500" />
                 <MacroBar label="Fat" value={data.macro_today.fat_g} target={data.active_meal_plan.target_fat_g} color="bg-red-500" />
                 <div className="mt-4 space-y-2">
-                  {data.active_meal_plan.today_meals.map((m, i) => (
+                  {data.active_meal_plan.today_meals.map((m: any, i: number) => (
                     <div key={i} className="flex justify-between text-sm">
                       <span className="text-slate-300 capitalize">{m.meal_type}: {m.name}</span>
                       <span className="text-slate-400">{m.calories} kcal</span>
@@ -205,7 +240,7 @@ export default function DashboardPage() {
           </h2>
           {data?.upcoming_events && data.upcoming_events.length > 0 ? (
             <div className="space-y-3">
-              {data.upcoming_events.map((ev) => (
+              {data.upcoming_events.map((ev: any) => (
                 <div key={ev.id} className="flex items-center gap-3">
                   <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: ev.color }} />
                   <div className="flex-1 min-w-0">
@@ -228,7 +263,7 @@ export default function DashboardPage() {
           </h2>
           {data?.today_tasks && data.today_tasks.length > 0 ? (
             <div className="space-y-2">
-              {data.today_tasks.map((task) => {
+              {data.today_tasks.map((task: any) => {
                 const overdue = task.due_date && new Date(task.due_date) < new Date(new Date().toDateString())
                 return (
                   <div key={task.id} className="flex items-center gap-3 text-sm">
@@ -257,7 +292,7 @@ export default function DashboardPage() {
           </h2>
           {data?.upcoming_fashion_releases && data.upcoming_fashion_releases.length > 0 ? (
             <div className="space-y-3">
-              {data.upcoming_fashion_releases.slice(0, 4).map((r) => {
+              {data.upcoming_fashion_releases.slice(0, 4).map((r: any) => {
                 const days = daysUntil(r.release_date)
                 return (
                   <div key={r.id} className="flex items-center gap-3">
