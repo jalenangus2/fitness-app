@@ -23,6 +23,9 @@ export const createSession = (data: WorkoutSessionCreate) =>
 export const updateSession = (id: number, data: Partial<WorkoutSessionCreate>) =>
   client.put<WorkoutSession>(`/tracking/sessions/${id}`, data).then(r => r.data)
 
+export const patchSession = (id: number, data: { plan_id?: number | null; name?: string }) =>
+  client.patch<WorkoutSession>(`/tracking/sessions/${id}`, data).then(r => r.data)
+
 export const deleteSession = (id: number) =>
   client.delete(`/tracking/sessions/${id}`)
 

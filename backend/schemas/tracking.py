@@ -36,6 +36,7 @@ class WorkoutSessionCreate(BaseModel):
 
 class WorkoutSessionUpdate(BaseModel):
     name: Optional[str] = None
+    plan_id: Optional[int] = None
     session_date: Optional[date] = None
     duration_mins: Optional[int] = None
     overall_rpe: Optional[float] = None

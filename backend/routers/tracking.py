@@ -151,6 +151,25 @@ def update_session(
     return _serialize_session(session)
 
 
+@router.patch("/sessions/{session_id}", response_model=WorkoutSessionResponse)
+def patch_session(
+    session_id: int,
+    data: WorkoutSessionUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    session = db.query(WorkoutSession).filter(WorkoutSession.id == session_id, WorkoutSession.user_id == current_user.id).first()
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    if data.plan_id is not None:
+        session.plan_id = data.plan_id if data.plan_id > 0 else None
+    if data.name is not None:
+        session.name = data.name.strip()
+    db.commit()
+    db.refresh(session)
+    return _serialize_session(session)
+
+
 @router.delete("/sessions/{session_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_session(
     session_id: int,

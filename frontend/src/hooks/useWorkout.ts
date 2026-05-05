@@ -95,6 +95,15 @@ export function useFinishSession() {
   })
 }
 
+export function useUpdateSession() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, data }: { id: number; data: { plan_id?: number | null; name?: string } }) =>
+      trackingApi.patchSession(id, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['workout-sessions'] }),
+  })
+}
+
 export function useDeleteSession() {
   const qc = useQueryClient()
   return useMutation({

@@ -4,7 +4,7 @@ import { Plus, Zap, CheckCircle, Trash2, ChevronDown, Play, Timer, X, Minus, Bar
 import {
   useWorkouts, useCreateWorkout, useActivateWorkout, useDeactivateWorkout, useUpdateWorkout,
   useReplaceExercises, useDeleteWorkout, useStartSession, useLogSet, useFinishSession,
-  useWorkoutSessions, useDeleteSession,
+  useWorkoutSessions, useDeleteSession, useUpdateSession,
 } from '../hooks/useWorkout'
 import { useToast } from '../components/ui/Toast'
 import Card from '../components/ui/Card'
@@ -36,6 +36,7 @@ export default function WorkoutPage() {
   const logSet = useLogSet()
   const finishSession = useFinishSession()
   const deleteSession = useDeleteSession()
+  const updateSession = useUpdateSession()
 
   const [activeTab, setActiveTab] = useState<'plans' | 'history'>('plans')
   const [showModal, setShowModal] = useState(false)
@@ -416,6 +417,8 @@ export default function WorkoutPage() {
               expanded={expandedSessionId === session.id}
               onToggle={() => setExpandedSessionId(expandedSessionId === session.id ? null : session.id)}
               onDelete={() => deleteSession.mutateAsync(session.id)}
+              plans={plans}
+              onAttachPlan={(id: number, planId: number) => updateSession.mutate({ id, data: { plan_id: planId } })}
             />
           ))}
         </div>
@@ -745,7 +748,15 @@ function WorkoutPlanCard({ plan, expanded, onToggle, onActivate, onDeactivate, o
   )
 }
 
-function SessionCard({ session, expanded, onToggle, onDelete }: { session: WorkoutSession; expanded: boolean; onToggle: () => void; onDelete: () => void }) {
+function SessionCard({ session, expanded, onToggle, onDelete, plans, onAttachPlan }: {
+  session: WorkoutSession
+  expanded: boolean
+  onToggle: () => void
+  onDelete: () => void
+  plans: WorkoutPlan[]
+  onAttachPlan: (id: number, planId: number) => void
+}) {
+  const [showPlanPicker, setShowPlanPicker] = useState(false)
   const setCount = session.set_logs.length
   const volume = session.set_logs.reduce((a, l) => a + (l.reps ?? 0) * (l.weight_lbs ?? 0), 0)
   const byExercise = session.set_logs.reduce<Record<string, typeof session.set_logs>>((acc, log) => {
@@ -753,6 +764,8 @@ function SessionCard({ session, expanded, onToggle, onDelete }: { session: Worko
     acc[log.exercise_name].push(log)
     return acc
   }, {})
+
+  const linkedPlan = plans.find(p => p.id === session.plan_id)
 
   return (
     <Card>
@@ -764,6 +777,7 @@ function SessionCard({ session, expanded, onToggle, onDelete }: { session: Worko
             {session.duration_mins && <span>{session.duration_mins} min</span>}
             <span>{setCount} set{setCount !== 1 ? 's' : ''}</span>
             {volume > 0 && <span>{volume.toLocaleString()} lbs vol</span>}
+            {linkedPlan && <span className="text-indigo-400">· {linkedPlan.name}</span>}
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -794,6 +808,34 @@ function SessionCard({ session, expanded, onToggle, onDelete }: { session: Worko
             </div>
           ))}
           {setCount === 0 && <p className="text-sm text-slate-500">No sets logged.</p>}
+
+          {/* Link Plan footer */}
+          <div className="pt-2 border-t border-slate-700/50">
+            {showPlanPicker ? (
+              <div className="flex items-center gap-2">
+                <select
+                  defaultValue={session.plan_id ?? ''}
+                  onChange={e => {
+                    const val = Number(e.target.value)
+                    onAttachPlan(session.id, val)
+                    setShowPlanPicker(false)
+                  }}
+                  className="flex-1 bg-slate-700 border border-slate-600 text-slate-100 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                >
+                  <option value={0}>No plan</option>
+                  {plans.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                </select>
+                <button onClick={() => setShowPlanPicker(false)} className="text-slate-500 hover:text-slate-300 text-xs px-2">Cancel</button>
+              </div>
+            ) : (
+              <button
+                onClick={() => setShowPlanPicker(true)}
+                className="text-xs text-slate-500 hover:text-indigo-400 transition-colors"
+              >
+                {linkedPlan ? `Linked: ${linkedPlan.name} — change` : '+ Link Plan'}
+              </button>
+            )}
+          </div>
         </div>
       )}
     </Card>
