@@ -25,6 +25,16 @@ export const activateWorkout = async (id: number): Promise<WorkoutPlan> => {
   return res.data
 }
 
+export const deactivateWorkout = async (id: number): Promise<WorkoutPlan> => {
+  const res = await client.patch(`/workouts/${id}/deactivate`)
+  return res.data
+}
+
+export const replaceExercises = async (id: number, exercises: any[]): Promise<WorkoutPlan> => {
+  const res = await client.put(`/workouts/${id}/exercises`, exercises)
+  return res.data
+}
+
 export const generateWorkout = async (data: GenerateWorkoutRequest): Promise<WorkoutPlan> => {
   const res = await client.post('/workouts/generate', data)
   return res.data

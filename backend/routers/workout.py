@@ -9,7 +9,7 @@ from ..models.workout import WorkoutExercise, WorkoutPlan
 from ..routers.auth import get_current_user
 from ..models.user import User
 from ..schemas.workout import (
-    GenerateWorkoutRequest, WorkoutExerciseResponse, WorkoutPlanCreate,
+    GenerateWorkoutRequest, WorkoutExerciseBase, WorkoutExerciseResponse, WorkoutPlanCreate,
     WorkoutPlanResponse, WorkoutPlanUpdate,
 )
 from ..services import claude_service
@@ -88,6 +88,30 @@ def activate_workout_plan(plan_id: int, current_user: User = Depends(get_current
     if not plan: raise HTTPException(status_code=404, detail="Plan not found")
     db.query(WorkoutPlan).filter(WorkoutPlan.user_id == current_user.id, WorkoutPlan.id != plan_id).update({"is_active": False})
     plan.is_active = True
+    db.commit()
+    db.refresh(plan)
+    return _serialize_plan(plan)
+
+@router.patch("/{plan_id}/deactivate", response_model=WorkoutPlanResponse)
+def deactivate_workout_plan(plan_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    plan = db.query(WorkoutPlan).filter(WorkoutPlan.id == plan_id, WorkoutPlan.user_id == current_user.id).first()
+    if not plan: raise HTTPException(status_code=404, detail="Plan not found")
+    plan.is_active = False
+    db.commit()
+    db.refresh(plan)
+    return _serialize_plan(plan)
+
+@router.put("/{plan_id}/exercises", response_model=WorkoutPlanResponse)
+def replace_exercises(plan_id: int, exercises: list[WorkoutExerciseBase], current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    plan = db.query(WorkoutPlan).filter(WorkoutPlan.id == plan_id, WorkoutPlan.user_id == current_user.id).first()
+    if not plan: raise HTTPException(status_code=404, detail="Plan not found")
+    db.query(WorkoutExercise).filter(WorkoutExercise.plan_id == plan_id).delete()
+    for i, ex in enumerate(exercises):
+        db.add(WorkoutExercise(
+            plan_id=plan_id, name=ex.name, sets=ex.sets, reps=ex.reps,
+            weight_lbs=ex.weight_lbs, duration_secs=ex.duration_secs,
+            rest_seconds=ex.rest_seconds, notes=ex.notes, order_index=i
+        ))
     db.commit()
     db.refresh(plan)
     return _serialize_plan(plan)
