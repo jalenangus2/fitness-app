@@ -51,6 +51,7 @@ export default function WorkoutPage() {
 
   const [editingPlan, setEditingPlan] = useState<WorkoutPlan | null>(null)
   const [editExercises, setEditExercises] = useState<Partial<WorkoutExercise>[]>([])
+  const [editMuscleGroups, setEditMuscleGroups] = useState<string[]>([])
   const [showPushModal, setShowPushModal] = useState(false)
   const [pushCount, setPushCount] = useState(20)
 
@@ -183,7 +184,10 @@ export default function WorkoutPage() {
 
   const handleSaveEditedPlan = async () => {
     if (!editingPlan) return
-    await replaceExercises.mutateAsync({ id: editingPlan.id!, exercises: editExercises as any[] })
+    await Promise.all([
+      replaceExercises.mutateAsync({ id: editingPlan.id!, exercises: editExercises as any[] }),
+      updatePlan.mutateAsync({ id: editingPlan.id!, data: { muscle_groups: editMuscleGroups } }),
+    ])
     toast('Plan updated!', 'success')
     setEditingPlan(null)
   }
@@ -318,7 +322,7 @@ export default function WorkoutPage() {
               onDeactivate={() => deactivate.mutateAsync(plan.id!).then(() => toast('Plan deactivated.', 'info'))}
               onDelete={() => remove.mutateAsync(plan.id!)}
               onStart={() => handleStartWorkout(plan)}
-              onEdit={() => { setEditingPlan(plan); setEditExercises(plan.exercises.map(ex => ({ ...ex }))) }}
+              onEdit={() => { setEditingPlan(plan); setEditExercises(plan.exercises.map(ex => ({ ...ex }))); setEditMuscleGroups([...plan.muscle_groups]) }}
               onRename={(name: string) => updatePlan.mutateAsync({ id: plan.id!, data: { name } }).then(() => toast('Plan renamed!', 'success'))}
             />
           ))}
@@ -586,6 +590,20 @@ export default function WorkoutPage() {
       {/* Edit exercises modal */}
       <Modal isOpen={!!editingPlan} onClose={() => setEditingPlan(null)} title={`Edit — ${editingPlan?.name}`} size="lg">
         <div className="space-y-3 max-h-[55vh] overflow-y-auto px-1">
+          {/* Muscle group selector */}
+          <div>
+            <p className="text-xs font-medium text-slate-400 mb-2">Target Muscles</p>
+            <div className="flex flex-wrap gap-1.5">
+              {MUSCLE_GROUPS.map(m => (
+                <button
+                  key={m}
+                  onClick={() => setEditMuscleGroups(prev => prev.includes(m) ? prev.filter(x => x !== m) : [...prev, m])}
+                  className={`px-2.5 py-1 text-xs rounded-full border transition-colors ${editMuscleGroups.includes(m) ? 'bg-indigo-600 border-indigo-500 text-white' : 'bg-slate-800 border-slate-600 text-slate-300 hover:border-slate-500'}`}
+                >{m}</button>
+              ))}
+            </div>
+          </div>
+          <div className="border-t border-slate-700 pt-3">
           <div className="grid grid-cols-[1fr_44px_28px_44px_60px_28px] gap-1.5 text-xs text-slate-500 px-1">
             <span>Exercise</span><span>Sets</span><span></span><span>Reps/s</span><span>Wt</span><span />
           </div>
@@ -612,6 +630,7 @@ export default function WorkoutPage() {
           <button onClick={() => setEditExercises([...editExercises, { name: '', sets: 3, reps: '10' }])} className="w-full text-center text-indigo-400 text-xs py-2 border border-dashed border-slate-700 rounded hover:border-indigo-500 transition-colors">
             <Plus size={12} className="inline mr-1" /> Add Exercise
           </button>
+          </div>
         </div>
         <div className="flex gap-3 pt-4 mt-4 border-t border-slate-700">
           <Button variant="secondary" onClick={() => setEditingPlan(null)} className="flex-1">Cancel</Button>
