@@ -37,6 +37,7 @@ export default function MealPage() {
   const [showGoalsModal, setShowGoalsModal] = useState(false)
   const [expandedId, setExpandedId] = useState<number | null>(null)
   const [expandedDay, setExpandedDay] = useState<number>(1)
+  const [selectedHistoryDay, setSelectedHistoryDay] = useState<string>('')
 
   const today = format(new Date(), 'yyyy-MM-dd')
 
@@ -227,56 +228,68 @@ export default function MealPage() {
           </div>
 
           {/* FOOD LOG HISTORY */}
-          {historyByDate.length > 0 && (
-            <div className="mt-8">
-              <h2 className="text-xl font-bold text-slate-100 mb-4">Food Log History</h2>
-              <div className="space-y-4">
-                {historyByDate.map(([dateKey, dayLogs]) => {
-                  const dayTotal = dayLogs.reduce((acc, l) => ({ cals: acc.cals + l.calories, prot: acc.prot + l.protein_g, carb: acc.carb + l.carbs_g, fat: acc.fat + l.fat_g }), { cals: 0, prot: 0, carb: 0, fat: 0 })
-                  const label = format(new Date(dateKey + 'T12:00:00'), 'EEEE, MMM d')
-                  return (
-                    <Card key={dateKey} className="bg-slate-800 border-slate-700">
-                      <div className="flex justify-between items-center mb-3">
-                        <p className="text-sm font-semibold text-slate-200">{label}</p>
-                        <div className="flex items-center gap-2">
-                          <p className="text-xs text-slate-500">{Math.round(dayTotal.cals)} k cal</p>
-                          <button
-                            onClick={() => openLogOnDate(dateKey)}
-                            className="flex items-center gap-1 text-xs text-emerald-400 hover:text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 px-2 py-1 rounded transition-colors"
-                            title={`Log food for ${label}`}
-                          >
-                            <Plus size={10} /> Log here
-                          </button>
-                        </div>
-                      </div>
-                      <div className="space-y-2">
-                        {dayLogs.map((log, i) => (
-                          <div key={i} className="flex justify-between items-center text-xs bg-slate-900 rounded px-3 py-2">
-                            <span className="text-slate-300">{log.name}</span>
-                            <div className="flex items-center gap-2">
-                              <span className="text-slate-500">{log.calories} k cal · P:{log.protein_g}g · C:{log.carbs_g}g · F:{log.fat_g}g</span>
-                              <button
-                                onClick={() => logNutrients.mutateAsync({ name: log.name, calories: log.calories, protein_g: log.protein_g, carbs_g: log.carbs_g, fat_g: log.fat_g }).then(() => toast('Re-added!', 'success'))}
-                                className="p-1 rounded text-slate-400 hover:text-emerald-400 hover:bg-slate-700 transition-colors"
-                                title="Re-add today"
-                              >
-                                <Plus size={12} />
-                              </button>
-                            </div>
+          {historyByDate.length > 0 && (() => {
+            const activeDay = (selectedHistoryDay && historyByDate.find(([d]) => d === selectedHistoryDay))
+              ? selectedHistoryDay
+              : (historyByDate.find(([d]) => d === today)?.[0] ?? historyByDate[0][0])
+            const dayLogs = historyByDate.find(([d]) => d === activeDay)?.[1] ?? []
+            const dayTotal = dayLogs.reduce((acc, l) => ({ cals: acc.cals + l.calories, prot: acc.prot + l.protein_g, carb: acc.carb + l.carbs_g, fat: acc.fat + l.fat_g }), { cals: 0, prot: 0, carb: 0, fat: 0 })
+            return (
+              <div className="mt-8">
+                <div className="flex items-center justify-between mb-3">
+                  <h2 className="text-xl font-bold text-slate-100">Food Log History</h2>
+                  <button
+                    onClick={() => openLogOnDate(activeDay)}
+                    className="flex items-center gap-1 text-xs text-emerald-400 hover:text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 px-2.5 py-1.5 rounded transition-colors"
+                  >
+                    <Plus size={11} /> Log here
+                  </button>
+                </div>
+                <select
+                  value={activeDay}
+                  onChange={e => setSelectedHistoryDay(e.target.value)}
+                  className="w-full bg-slate-800 border border-slate-600 text-slate-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-500 mb-4"
+                >
+                  {historyByDate.map(([dateKey]) => (
+                    <option key={dateKey} value={dateKey}>
+                      {dateKey === today ? 'Today' : format(new Date(dateKey + 'T12:00:00'), 'EEEE, MMM d')}
+                    </option>
+                  ))}
+                </select>
+                <Card className="bg-slate-800 border-slate-700">
+                  <div className="flex justify-between items-center mb-3">
+                    <p className="text-xs text-slate-400">{Math.round(dayTotal.cals)} kcal total</p>
+                    <div className="flex gap-3 text-xs text-slate-500">
+                      <span>P: <span className="text-blue-400">{Math.round(dayTotal.prot)}g</span></span>
+                      <span>C: <span className="text-yellow-400">{Math.round(dayTotal.carb)}g</span></span>
+                      <span>F: <span className="text-rose-400">{Math.round(dayTotal.fat)}g</span></span>
+                    </div>
+                  </div>
+                  {dayLogs.length === 0 ? (
+                    <p className="text-sm text-slate-500 text-center py-6">No food logged for this day.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {dayLogs.map((log, i) => (
+                        <div key={i} className="flex justify-between items-center text-xs bg-slate-900 rounded px-3 py-2">
+                          <span className="text-slate-300">{log.name}</span>
+                          <div className="flex items-center gap-2">
+                            <span className="text-slate-500">{log.calories} kcal · P:{log.protein_g}g · C:{log.carbs_g}g · F:{log.fat_g}g</span>
+                            <button
+                              onClick={() => logNutrients.mutateAsync({ name: log.name, calories: log.calories, protein_g: log.protein_g, carbs_g: log.carbs_g, fat_g: log.fat_g }).then(() => toast('Re-added!', 'success'))}
+                              className="p-1 rounded text-slate-400 hover:text-emerald-400 hover:bg-slate-700 transition-colors"
+                              title="Re-add today"
+                            >
+                              <Plus size={12} />
+                            </button>
                           </div>
-                        ))}
-                      </div>
-                      <div className="flex gap-4 mt-3 pt-3 border-t border-slate-700/50 text-xs text-slate-500">
-                        <span>P: <span className="text-blue-400">{Math.round(dayTotal.prot)}g</span></span>
-                        <span>C: <span className="text-yellow-400">{Math.round(dayTotal.carb)}g</span></span>
-                        <span>F: <span className="text-rose-400">{Math.round(dayTotal.fat)}g</span></span>
-                      </div>
-                    </Card>
-                  )
-                })}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </Card>
               </div>
-            </div>
-          )}
+            )
+          })()}
         </>
       )}
 
