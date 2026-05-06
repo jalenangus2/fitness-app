@@ -1,5 +1,5 @@
 """Meal plans router: CRUD + AI generation + Daily Logging."""
-from datetime import datetime, date, timedelta
+from datetime import datetime, date, timedelta, time
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
@@ -156,7 +156,9 @@ def get_daily_nutrition(current_user: User = Depends(get_current_user), db: Sess
 
 @router.post("/logs", response_model=NutritionLogResponse)
 def log_nutrition(data: NutritionLogCreate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    log = NutritionLog(user_id=current_user.id, **data.dict())
+    log_data = data.model_dump(exclude={'log_date'})
+    consumed_at = datetime.combine(data.log_date, time(12, 0)) if data.log_date else datetime.utcnow()
+    log = NutritionLog(user_id=current_user.id, consumed_at=consumed_at, **log_data)
     db.add(log)
     db.commit()
     db.refresh(log)

@@ -1,7 +1,8 @@
 import { useState, useMemo } from 'react'
-import { format, parseISO } from 'date-fns'
-import { Plus, Zap, CheckCircle, Trash2, ChevronDown, ShoppingCart, Search, Pencil } from 'lucide-react'
+import { format, parseISO, startOfWeek } from 'date-fns'
+import { Plus, Zap, CheckCircle, Trash2, ChevronDown, ShoppingCart, Search, Pencil, BarChart2, Dumbbell } from 'lucide-react'
 import { useMealPlans, useCreateMealPlan, useUpdateMealPlan, useActivateMealPlan, useDeleteMealPlan, useDailyNutrition, useLogNutrition, useSearchFoods, useNutritionHistory, useCurrentUser, useUpdateNutritionGoals } from '../hooks/useMeal'
+import { useWorkoutSessions } from '../hooks/useWorkout'
 import { useCreateShoppingList } from '../hooks/useShopping'
 import { useToast } from '../components/ui/Toast'
 import Card from '../components/ui/Card'
@@ -19,6 +20,8 @@ export default function MealPage() {
   const { data: plans = [], isLoading } = useMealPlans()
   const { data: logs = [] } = useDailyNutrition()
   const { data: currentUser } = useCurrentUser()
+  const { data: historyLogs = [] } = useNutritionHistory(30)
+  const { data: sessions = [] } = useWorkoutSessions(200)
   const createManual = useCreateMealPlan()
   const updatePlan = useUpdateMealPlan()
   const updateGoals = useUpdateNutritionGoals()
@@ -26,19 +29,21 @@ export default function MealPage() {
   const remove = useDeleteMealPlan()
   const createList = useCreateShoppingList()
   const logNutrients = useLogNutrition()
-  const { data: historyLogs = [] } = useNutritionHistory(30)
   const { toast } = useToast()
 
   // UI State
+  const [activeTab, setActiveTab] = useState<'overview' | 'graphs'>('overview')
   const [showPlanModal, setShowPlanModal] = useState(false)
   const [showLogModal, setShowLogModal] = useState(false)
   const [showGoalsModal, setShowGoalsModal] = useState(false)
   const [expandedId, setExpandedId] = useState<number | null>(null)
   const [expandedDay, setExpandedDay] = useState<number>(1)
 
+  const today = format(new Date(), 'yyyy-MM-dd')
+
   // Forms
   const [form, setForm] = useState({ name: '', goal: 'muscle_gain', target_calories: 2500, target_protein_g: 180, target_carbs_g: 250, target_fat_g: 80, duration_days: 7 })
-  const [logForm, setLogForm] = useState({ name: '', calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 })
+  const [logForm, setLogForm] = useState({ name: '', calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0, log_date: today })
   const [goalsForm, setGoalsForm] = useState({ target_calories: 2000, target_protein_g: 150, target_carbs_g: 200, target_fat_g: 65 })
   const [foodSearch, setFoodSearch] = useState('')
   const { data: foodResults = [] } = useSearchFoods(foodSearch)
@@ -54,10 +59,10 @@ export default function MealPage() {
       fat: activePlan.target_fat_g || 65,
     }
     return {
-      cals: currentUser?.nutrition_target_calories ?? 2000,
-      prot: currentUser?.nutrition_target_protein_g ?? 150,
-      carb: currentUser?.nutrition_target_carbs_g ?? 200,
-      fat: currentUser?.nutrition_target_fat_g ?? 65,
+      cals: (currentUser as any)?.nutrition_target_calories ?? 2000,
+      prot: (currentUser as any)?.nutrition_target_protein_g ?? 150,
+      carb: (currentUser as any)?.nutrition_target_carbs_g ?? 200,
+      fat: (currentUser as any)?.nutrition_target_fat_g ?? 65,
     }
   }, [activePlan, currentUser])
 
@@ -68,6 +73,49 @@ export default function MealPage() {
     fat: acc.fat + log.fat_g
   }), { cals: 0, prot: 0, carb: 0, fat: 0 }), [logs])
 
+  const historyByDate = useMemo(() => {
+    const groups: Record<string, typeof historyLogs> = {}
+    historyLogs.forEach(log => {
+      const day = log.consumed_at ? format(parseISO(log.consumed_at), 'yyyy-MM-dd') : 'Today'
+      if (!groups[day]) groups[day] = []
+      groups[day].push(log)
+    })
+    return Object.entries(groups).sort(([a], [b]) => b.localeCompare(a))
+  }, [historyLogs])
+
+  // Graph data computations
+  const calChartData = useMemo(() => {
+    return historyByDate.slice(0, 14).reverse().map(([dateKey, dayLogs]) => ({
+      date: dateKey,
+      cals: Math.round(dayLogs.reduce((s, l) => s + l.calories, 0)),
+    }))
+  }, [historyByDate])
+
+  const workoutWeekData = useMemo(() => {
+    const weekCounts: Record<string, number> = {}
+    sessions.forEach((s: any) => {
+      if (!s.session_date) return
+      const weekStart = format(startOfWeek(parseISO(s.session_date), { weekStartsOn: 1 }), 'yyyy-MM-dd')
+      weekCounts[weekStart] = (weekCounts[weekStart] || 0) + 1
+    })
+    return Object.entries(weekCounts).sort(([a], [b]) => a.localeCompare(b)).slice(-8).map(([week, count]) => ({ week, count }))
+  }, [sessions])
+
+  const macroAverages = useMemo(() => {
+    if (!historyByDate.length) return null
+    const days = historyByDate.map(([, dayLogs]) => ({
+      prot: dayLogs.reduce((s, l) => s + l.protein_g, 0),
+      carb: dayLogs.reduce((s, l) => s + l.carbs_g, 0),
+      fat: dayLogs.reduce((s, l) => s + l.fat_g, 0),
+    }))
+    const n = days.length
+    return {
+      prot: Math.round(days.reduce((s, d) => s + d.prot, 0) / n),
+      carb: Math.round(days.reduce((s, d) => s + d.carb, 0) / n),
+      fat: Math.round(days.reduce((s, d) => s + d.fat, 0) / n),
+    }
+  }, [historyByDate])
+
   const openGoalsModal = () => {
     setGoalsForm({
       target_calories: dailyTargets.cals,
@@ -76,6 +124,12 @@ export default function MealPage() {
       target_fat_g: dailyTargets.fat,
     })
     setShowGoalsModal(true)
+  }
+
+  const openLogOnDate = (dateKey: string) => {
+    setLogForm(f => ({ ...f, log_date: dateKey, name: '', calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 }))
+    setFoodSearch('')
+    setShowLogModal(true)
   }
 
   const handleSaveGoals = async () => {
@@ -97,16 +151,6 @@ export default function MealPage() {
     }
   }
 
-  const historyByDate = useMemo(() => {
-    const groups: Record<string, typeof historyLogs> = {}
-    historyLogs.forEach(log => {
-      const day = log.consumed_at ? format(parseISO(log.consumed_at), 'yyyy-MM-dd') : 'Today'
-      if (!groups[day]) groups[day] = []
-      groups[day].push(log)
-    })
-    return Object.entries(groups).sort(([a], [b]) => b.localeCompare(a))
-  }, [historyLogs])
-
   const handleCreatePlan = async () => {
     try {
       await createManual.mutateAsync({ ...form, is_ai_generated: false, meals: [] })
@@ -123,7 +167,7 @@ export default function MealPage() {
       await logNutrients.mutateAsync(logForm)
       toast('Food logged!', 'success')
       setShowLogModal(false)
-      setLogForm({ name: '', calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 })
+      setLogForm({ name: '', calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0, log_date: today })
     } catch {
       toast('Failed to log food. Please try again.', 'error')
     }
@@ -133,14 +177,14 @@ export default function MealPage() {
 
   return (
     <div className="space-y-6 pb-20">
-      
+
       {/* MACRO DASHBOARD */}
       <Card className="bg-slate-800 border-slate-700">
         <div className="flex justify-between items-center mb-5">
           <h2 className="text-lg font-bold text-slate-100">Today's Nutrition</h2>
           <div className="flex gap-2">
             <Button size="sm" variant="ghost" onClick={openGoalsModal}><Pencil size={14} /></Button>
-            <Button size="sm" onClick={() => setShowLogModal(true)}><Plus size={14} className="mr-1"/> Quick Add</Button>
+            <Button size="sm" onClick={() => { setLogForm(f => ({ ...f, log_date: today })); setShowLogModal(true) }}><Plus size={14} className="mr-1"/> Quick Add</Button>
           </div>
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -151,74 +195,162 @@ export default function MealPage() {
         </div>
       </Card>
 
-      {/* PLANNER SECTION */}
-      <div className="flex items-center justify-between mt-8">
-        <div>
-          <h1 className="text-xl font-bold text-slate-100">Meal Plans</h1>
-          <p className="text-xs text-slate-500 mt-0.5">Plans set macro targets for the day</p>
-        </div>
-        <Button onClick={() => setShowPlanModal(true)} variant="secondary" size="sm"><Plus size={16} /> New Plan</Button>
+      {/* TAB BAR */}
+      <div className="flex bg-slate-800 rounded-xl p-1 gap-1 border border-slate-700">
+        <button
+          onClick={() => setActiveTab('overview')}
+          className={`flex-1 flex items-center justify-center gap-2 py-2 px-4 rounded-lg text-sm font-medium transition-all ${activeTab === 'overview' ? 'bg-slate-700 text-slate-100 shadow' : 'text-slate-400 hover:text-slate-300'}`}
+        >
+          <Dumbbell size={14} /> Overview
+        </button>
+        <button
+          onClick={() => setActiveTab('graphs')}
+          className={`flex-1 flex items-center justify-center gap-2 py-2 px-4 rounded-lg text-sm font-medium transition-all ${activeTab === 'graphs' ? 'bg-slate-700 text-slate-100 shadow' : 'text-slate-400 hover:text-slate-300'}`}
+        >
+          <BarChart2 size={14} /> Graphs
+        </button>
       </div>
 
-      <div className="space-y-4">
-        {plans.map((plan) => (
-          <MealPlanCard
-            key={plan.id} plan={plan} expanded={expandedId === plan.id} expandedDay={expandedDay}
-            onToggle={() => setExpandedId(expandedId === plan.id ? null : plan.id)}
-            onDayChange={setExpandedDay}
-            onActivate={() => activate.mutateAsync(plan.id!).then(() => toast('Meal plan activated!', 'success'))}
-            onDelete={() => remove.mutateAsync(plan.id!).then(() => toast('Meal plan deleted.', 'info'))}
-            onCreateShoppingList={() => createList.mutateAsync({ name: `${plan.name} Shopping List`, meal_plan_id: plan.id }).then(() => toast('Shopping List created!', 'success'))}
-          />
-        ))}
-      </div>
+      {/* OVERVIEW TAB */}
+      {activeTab === 'overview' && (
+        <>
+          {/* PLANNER SECTION */}
+          <div className="flex items-center justify-between mt-2">
+            <h1 className="text-xl font-bold text-slate-100">Meal Plans</h1>
+            <Button onClick={() => setShowPlanModal(true)} variant="secondary" size="sm"><Plus size={16} /> New Plan</Button>
+          </div>
 
-      {/* FOOD LOG HISTORY */}
-      {historyByDate.length > 0 && (
-        <div className="mt-8">
-          <h2 className="text-xl font-bold text-slate-100 mb-4">Food Log History</h2>
           <div className="space-y-4">
-            {historyByDate.map(([dateKey, logs]) => {
-              const dayTotal = logs.reduce((acc, l) => ({ cals: acc.cals + l.calories, prot: acc.prot + l.protein_g, carb: acc.carb + l.carbs_g, fat: acc.fat + l.fat_g }), { cals: 0, prot: 0, carb: 0, fat: 0 })
-              const label = format(new Date(dateKey + 'T12:00:00'), 'EEEE, MMM d')
-              return (
-                <Card key={dateKey} className="bg-slate-800 border-slate-700">
-                  <div className="flex justify-between items-center mb-3">
-                    <p className="text-sm font-semibold text-slate-200">{label}</p>
-                    <p className="text-xs text-slate-500">{Math.round(dayTotal.cals)} k cal</p>
-                  </div>
-                  <div className="space-y-2">
-                    {logs.map((log, i) => (
-                      <div key={i} className="flex justify-between items-center text-xs bg-slate-900 rounded px-3 py-2">
-                        <span className="text-slate-300">{log.name}</span>
+            {plans.map((plan) => (
+              <MealPlanCard
+                key={plan.id} plan={plan} expanded={expandedId === plan.id} expandedDay={expandedDay}
+                onToggle={() => setExpandedId(expandedId === plan.id ? null : plan.id)}
+                onDayChange={setExpandedDay}
+                onActivate={() => activate.mutateAsync(plan.id!).then(() => toast('Meal plan activated!', 'success'))}
+                onDelete={() => remove.mutateAsync(plan.id!).then(() => toast('Meal plan deleted.', 'info'))}
+                onCreateShoppingList={() => createList.mutateAsync({ name: `${plan.name} Shopping List`, meal_plan_id: plan.id }).then(() => toast('Shopping List created!', 'success'))}
+              />
+            ))}
+          </div>
+
+          {/* FOOD LOG HISTORY */}
+          {historyByDate.length > 0 && (
+            <div className="mt-8">
+              <h2 className="text-xl font-bold text-slate-100 mb-4">Food Log History</h2>
+              <div className="space-y-4">
+                {historyByDate.map(([dateKey, dayLogs]) => {
+                  const dayTotal = dayLogs.reduce((acc, l) => ({ cals: acc.cals + l.calories, prot: acc.prot + l.protein_g, carb: acc.carb + l.carbs_g, fat: acc.fat + l.fat_g }), { cals: 0, prot: 0, carb: 0, fat: 0 })
+                  const label = format(new Date(dateKey + 'T12:00:00'), 'EEEE, MMM d')
+                  return (
+                    <Card key={dateKey} className="bg-slate-800 border-slate-700">
+                      <div className="flex justify-between items-center mb-3">
+                        <p className="text-sm font-semibold text-slate-200">{label}</p>
                         <div className="flex items-center gap-2">
-                          <span className="text-slate-500">{log.calories} k cal · P:{log.protein_g}g · C:{log.carbs_g}g · F:{log.fat_g}g</span>
+                          <p className="text-xs text-slate-500">{Math.round(dayTotal.cals)} k cal</p>
                           <button
-                            onClick={() => logNutrients.mutateAsync({ name: log.name, calories: log.calories, protein_g: log.protein_g, carbs_g: log.carbs_g, fat_g: log.fat_g }).then(() => toast('Re-added!', 'success'))}
-                            className="p-1 rounded text-slate-400 hover:text-emerald-400 hover:bg-slate-700 transition-colors"
-                            title="Re-add today"
+                            onClick={() => openLogOnDate(dateKey)}
+                            className="flex items-center gap-1 text-xs text-emerald-400 hover:text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 px-2 py-1 rounded transition-colors"
+                            title={`Log food for ${label}`}
                           >
-                            <Plus size={12} />
+                            <Plus size={10} /> Log here
                           </button>
                         </div>
                       </div>
-                    ))}
-                  </div>
-                  <div className="flex gap-4 mt-3 pt-3 border-t border-slate-700/50 text-xs text-slate-500">
-                    <span>P: <span className="text-blue-400">{Math.round(dayTotal.prot)}g</span></span>
-                    <span>C: <span className="text-yellow-400">{Math.round(dayTotal.carb)}g</span></span>
-                    <span>F: <span className="text-rose-400">{Math.round(dayTotal.fat)}g</span></span>
-                  </div>
-                </Card>
-              )
-            })}
-          </div>
+                      <div className="space-y-2">
+                        {dayLogs.map((log, i) => (
+                          <div key={i} className="flex justify-between items-center text-xs bg-slate-900 rounded px-3 py-2">
+                            <span className="text-slate-300">{log.name}</span>
+                            <div className="flex items-center gap-2">
+                              <span className="text-slate-500">{log.calories} k cal · P:{log.protein_g}g · C:{log.carbs_g}g · F:{log.fat_g}g</span>
+                              <button
+                                onClick={() => logNutrients.mutateAsync({ name: log.name, calories: log.calories, protein_g: log.protein_g, carbs_g: log.carbs_g, fat_g: log.fat_g }).then(() => toast('Re-added!', 'success'))}
+                                className="p-1 rounded text-slate-400 hover:text-emerald-400 hover:bg-slate-700 transition-colors"
+                                title="Re-add today"
+                              >
+                                <Plus size={12} />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="flex gap-4 mt-3 pt-3 border-t border-slate-700/50 text-xs text-slate-500">
+                        <span>P: <span className="text-blue-400">{Math.round(dayTotal.prot)}g</span></span>
+                        <span>C: <span className="text-yellow-400">{Math.round(dayTotal.carb)}g</span></span>
+                        <span>F: <span className="text-rose-400">{Math.round(dayTotal.fat)}g</span></span>
+                      </div>
+                    </Card>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+        </>
+      )}
+
+      {/* GRAPHS TAB */}
+      {activeTab === 'graphs' && (
+        <div className="space-y-6">
+
+          {/* CALORIE HISTORY */}
+          <Card className="bg-slate-800 border-slate-700">
+            <h2 className="text-base font-bold text-slate-100 mb-1">Calorie History</h2>
+            <p className="text-xs text-slate-500 mb-4">Last {calChartData.length} days</p>
+            {calChartData.length === 0 ? (
+              <p className="text-sm text-slate-500 text-center py-8">No nutrition logs yet. Start logging food to see your history.</p>
+            ) : (
+              <BarChart
+                data={calChartData.map(d => ({ label: format(new Date(d.date + 'T12:00:00'), 'M/d'), value: d.cals }))}
+                color="#10b981"
+                target={dailyTargets.cals}
+                unit="kcal"
+              />
+            )}
+          </Card>
+
+          {/* MACRO AVERAGES */}
+          {macroAverages && (
+            <Card className="bg-slate-800 border-slate-700">
+              <h2 className="text-base font-bold text-slate-100 mb-1">30-Day Macro Averages</h2>
+              <p className="text-xs text-slate-500 mb-4">Daily average over {historyByDate.length} logged days</p>
+              <div className="space-y-3">
+                <MacroAvgBar label="Protein" value={macroAverages.prot} target={dailyTargets.prot} color="#3b82f6" />
+                <MacroAvgBar label="Carbs" value={macroAverages.carb} target={dailyTargets.carb} color="#f59e0b" />
+                <MacroAvgBar label="Fat" value={macroAverages.fat} target={dailyTargets.fat} color="#f43f5e" />
+              </div>
+            </Card>
+          )}
+
+          {/* WORKOUT FREQUENCY */}
+          <Card className="bg-slate-800 border-slate-700">
+            <h2 className="text-base font-bold text-slate-100 mb-1">Workout Frequency</h2>
+            <p className="text-xs text-slate-500 mb-4">Workouts per week (last 8 weeks)</p>
+            {workoutWeekData.length === 0 ? (
+              <p className="text-sm text-slate-500 text-center py-8">No workout sessions recorded yet.</p>
+            ) : (
+              <BarChart
+                data={workoutWeekData.map(d => ({ label: format(new Date(d.week + 'T12:00:00'), 'M/d'), value: d.count }))}
+                color="#6366f1"
+                unit="sessions"
+              />
+            )}
+          </Card>
         </div>
       )}
 
       {/* QUICK ADD LOG MODAL */}
       <Modal isOpen={showLogModal} onClose={() => { setShowLogModal(false); setFoodSearch('') }} title="Log Food">
         <div className="space-y-4">
+          {/* Date picker */}
+          <div>
+            <label className="block text-xs font-medium text-slate-400 mb-1">Log Date</label>
+            <input
+              type="date"
+              value={logForm.log_date}
+              max={today}
+              onChange={e => setLogForm(f => ({ ...f, log_date: e.target.value }))}
+              className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-indigo-500"
+            />
+          </div>
           <div className="relative">
             <Input
               label="Search Food"
@@ -238,7 +370,7 @@ export default function MealPage() {
                     key={food.id}
                     className="px-3 py-2 cursor-pointer hover:bg-slate-700 border-b border-slate-700/50 last:border-0"
                     onClick={() => {
-                      setLogForm({ name: food.name, calories: food.calories, protein_g: food.protein_g, carbs_g: food.carbs_g, fat_g: food.fat_g })
+                      setLogForm(f => ({ ...f, name: food.name, calories: food.calories, protein_g: food.protein_g, carbs_g: food.carbs_g, fat_g: food.fat_g }))
                       setFoodSearch('')
                     }}
                   >
@@ -255,6 +387,11 @@ export default function MealPage() {
             <Input label="Carbs (g)" type="number" value={logForm.carbs_g} onChange={e => setLogForm({...logForm, carbs_g: Number(e.target.value)})} />
             <Input label="Fat (g)" type="number" value={logForm.fat_g} onChange={e => setLogForm({...logForm, fat_g: Number(e.target.value)})} />
           </div>
+          {logForm.log_date !== today && (
+            <p className="text-xs text-amber-400 bg-amber-500/10 rounded px-3 py-2">
+              Logging for {format(new Date(logForm.log_date + 'T12:00:00'), 'EEEE, MMM d')}
+            </p>
+          )}
           <Button onClick={handleLogNutrition} className="w-full">Log Nutrition</Button>
         </div>
       </Modal>
@@ -283,7 +420,7 @@ export default function MealPage() {
       {/* EDIT NUTRITION GOALS MODAL */}
       <Modal isOpen={showGoalsModal} onClose={() => setShowGoalsModal(false)} title="Daily Nutrition Goals">
         <div className="space-y-4">
-          <p className="text-sm text-slate-400">{activePlan ? `Updates targets for "${activePlan.name}"` : 'Creates a "My Goals" plan and sets it active'}</p>
+          <p className="text-sm text-slate-400">{activePlan ? `Updates targets for "${activePlan.name}"` : 'Sets your personal daily nutrition goals'}</p>
           <Input label="Daily Calories (k cal)" type="number" min={500} value={goalsForm.target_calories} onChange={e => setGoalsForm(f => ({ ...f, target_calories: Number(e.target.value) }))} />
           <div className="grid grid-cols-3 gap-3">
             <Input label="Protein (g)" type="number" min={0} value={goalsForm.target_protein_g} onChange={e => setGoalsForm(f => ({ ...f, target_protein_g: Number(e.target.value) }))} />
@@ -325,6 +462,59 @@ function MacroRing({ label, current, target, unit, color }: { label: string; cur
       </div>
       <p className="text-xs text-slate-400 font-medium">{label}</p>
       <p className="text-[10px] text-slate-600">{target}{unit}</p>
+    </div>
+  )
+}
+
+function MacroAvgBar({ label, value, target, color }: { label: string; value: number; target: number; color: string }) {
+  const pct = target > 0 ? Math.min(1, value / target) : 0
+  return (
+    <div>
+      <div className="flex justify-between items-center mb-1">
+        <span className="text-xs font-medium text-slate-300">{label}</span>
+        <span className="text-xs text-slate-400">{value}g <span className="text-slate-600">/ {target}g</span></span>
+      </div>
+      <div className="h-2 bg-slate-700 rounded-full overflow-hidden">
+        <div className="h-full rounded-full transition-all" style={{ width: `${pct * 100}%`, backgroundColor: color }} />
+      </div>
+    </div>
+  )
+}
+
+function BarChart({ data, color, target, unit }: { data: { label: string; value: number }[]; color: string; target?: number; unit: string }) {
+  const max = Math.max(...data.map(d => d.value), target || 0, 1)
+  const BAR_H = 120
+
+  return (
+    <div className="overflow-x-auto">
+      <div className="flex items-end gap-1.5 min-w-max px-1" style={{ height: BAR_H + 40 }}>
+        {data.map((d, i) => {
+          const barH = Math.round((d.value / max) * BAR_H)
+          const targetH = target ? Math.round((target / max) * BAR_H) : null
+          return (
+            <div key={i} className="flex flex-col items-center gap-1" style={{ width: 32 }}>
+              <div className="relative flex items-end" style={{ height: BAR_H }}>
+                {targetH !== null && (
+                  <div
+                    className="absolute left-0 right-0 border-t border-dashed border-slate-500 opacity-50"
+                    style={{ bottom: targetH }}
+                  />
+                )}
+                <div
+                  className="w-full rounded-t transition-all"
+                  style={{ height: barH || 2, backgroundColor: color, opacity: barH < 4 ? 0.3 : 1 }}
+                  title={`${d.value} ${unit}`}
+                />
+              </div>
+              <span className="text-[9px] text-slate-500 whitespace-nowrap">{d.label}</span>
+            </div>
+          )
+        })}
+      </div>
+      <div className="flex items-center gap-3 mt-2 text-[10px] text-slate-500">
+        <span className="flex items-center gap-1"><span className="inline-block w-3 h-2 rounded-sm" style={{ backgroundColor: color }} /> Value</span>
+        {target && <span className="flex items-center gap-1"><span className="inline-block w-4 border-t border-dashed border-slate-400" /> Target ({target} {unit})</span>}
+      </div>
     </div>
   )
 }

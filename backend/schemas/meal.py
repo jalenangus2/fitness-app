@@ -1,6 +1,6 @@
 from pydantic import BaseModel, ConfigDict
 from typing import Optional, List
-from datetime import datetime
+from datetime import datetime, date
 
 # --- Items & Meals ---
 class MealItemBase(BaseModel):
@@ -96,7 +96,7 @@ class NutritionLogBase(BaseModel):
     fat_g: float
 
 class NutritionLogCreate(NutritionLogBase):
-    pass
+    log_date: Optional[date] = None
 
 class NutritionLogResponse(NutritionLogBase):
     model_config = ConfigDict(from_attributes=True)

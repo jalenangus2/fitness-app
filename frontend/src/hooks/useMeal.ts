@@ -58,7 +58,7 @@ export function useDailyNutrition() {
 export function useLogNutrition() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (data: api.NutritionLog) => api.logNutrition(data),
+    mutationFn: (data: Parameters<typeof api.logNutrition>[0]) => api.logNutrition(data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['nutrition-logs'] })
       qc.invalidateQueries({ queryKey: ['nutrition-history'] })
