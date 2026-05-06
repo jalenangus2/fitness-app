@@ -244,25 +244,29 @@ export default function WorkoutPage() {
     return Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 5)
   }, [sessions])
 
-  const volumeByPlan = useMemo(() => {
-    const planMap: Record<string, { planName: string; dailyVol: Record<string, number> }> = {}
+  const exerciseProgress = useMemo(() => {
+    // Track max weight logged per exercise per day across all sessions
+    const exMap: Record<string, Record<string, number>> = {}
     const sorted = [...sessions].sort((a, b) => a.session_date.localeCompare(b.session_date))
     sorted.forEach(s => {
-      const key = s.plan_id != null ? String(s.plan_id) : 'adhoc'
-      const planName = s.plan_id ? (plans.find(p => p.id === s.plan_id)?.name ?? `Plan ${s.plan_id}`) : 'Ad-hoc'
-      if (!planMap[key]) planMap[key] = { planName, dailyVol: {} }
-      const vol = s.set_logs.reduce((a, l) => a + (l.reps ?? 0) * (l.weight_lbs ?? 0), 0)
-      planMap[key].dailyVol[s.session_date] = (planMap[key].dailyVol[s.session_date] ?? 0) + vol
+      s.set_logs.forEach(log => {
+        if (!log.weight_lbs || log.weight_lbs <= 0) return
+        if (!exMap[log.exercise_name]) exMap[log.exercise_name] = {}
+        const prev = exMap[log.exercise_name][s.session_date] ?? 0
+        exMap[log.exercise_name][s.session_date] = Math.max(prev, log.weight_lbs)
+      })
     })
-    return Object.values(planMap)
-      .map(p => ({
-        planName: p.planName,
-        data: Object.entries(p.dailyVol)
+    return Object.entries(exMap)
+      .map(([name, dateWeights]) => ({
+        name,
+        data: Object.entries(dateWeights)
           .sort(([a], [b]) => a.localeCompare(b))
-          .map(([date, volume]) => ({ date, volume })),
+          .map(([date, weight]) => ({ date, weight })),
       }))
-      .filter(p => p.data.length >= 2)
-  }, [sessions, plans])
+      .filter(ex => ex.data.length >= 2)
+      .sort((a, b) => b.data.length - a.data.length)
+      .slice(0, 10)
+  }, [sessions])
 
   const workoutWeekData = useMemo(() => {
     const weekCounts: Record<string, number> = {}
@@ -551,22 +555,22 @@ export default function WorkoutPage() {
             )}
           </Card>
 
-          {/* Volume Progress by Plan */}
-          {volumeByPlan.length === 0 ? (
+          {/* Exercise Progress */}
+          {exerciseProgress.length === 0 ? (
             <Card className="bg-slate-800 border-slate-700">
-              <h3 className="text-base font-bold text-slate-100 mb-1">Volume Progress</h3>
-              <p className="text-sm text-slate-500 text-center py-8">Log at least 2 sessions to see progress charts.</p>
+              <h3 className="text-base font-bold text-slate-100 mb-1">Exercise Progress</h3>
+              <p className="text-sm text-slate-500 text-center py-8">Log weighted exercises across 2+ sessions to see progress.</p>
             </Card>
           ) : (
             <Card className="bg-slate-800 border-slate-700">
-              <h3 className="text-base font-bold text-slate-100 mb-1">Volume Progress</h3>
-              <p className="text-xs text-slate-500 mb-4">Total lbs lifted per day (reps × weight), by plan</p>
+              <h3 className="text-base font-bold text-slate-100 mb-1">Exercise Progress</h3>
+              <p className="text-xs text-slate-500 mb-4">Max weight logged per exercise per day (lbs)</p>
               <div className="space-y-6">
-                {volumeByPlan.map(({ planName, data }) => (
-                  <div key={planName}>
-                    <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">{planName}</p>
+                {exerciseProgress.map(({ name, data }) => (
+                  <div key={name}>
+                    <p className="text-xs font-semibold text-slate-300 mb-2">{name}</p>
                     <LineChart
-                      data={data.slice(-16).map(d => ({ label: format(parseISO(d.date), 'M/d'), value: d.volume }))}
+                      data={data.slice(-16).map(d => ({ label: format(parseISO(d.date), 'M/d'), value: d.weight }))}
                       color="#10b981"
                       unit="lbs"
                     />
@@ -824,46 +828,77 @@ export default function WorkoutPage() {
 
 function LineChart({ data, color, unit }: { data: { label: string; value: number }[]; color: string; unit: string }) {
   if (data.length < 2) return <p className="text-xs text-slate-500 text-center py-4">Not enough data points yet.</p>
-  const max = Math.max(...data.map(d => d.value), 1)
-  const PW = 40
-  const H = 100
-  const PAD_TOP = 12
-  const PAD_BOT = 0
-  const chartH = H - PAD_TOP - PAD_BOT
-  const totalW = data.length * PW
 
-  const xs = data.map((_, i) => i * PW + PW / 2)
-  const ys = data.map(d => PAD_TOP + chartH - Math.max(0, (d.value / max) * chartH))
-  const points = xs.map((x, i) => `${x},${ys[i]}`).join(' ')
-  const areaPoints = `${xs[0]},${H} ${points} ${xs[xs.length - 1]},${H}`
+  const max = Math.max(...data.map(d => d.value), 1)
+  const Y_PAD = 36   // left space for y-axis labels
+  const PW = 44      // pixels per data point
+  const H = 130      // total svg height
+  const PAD_TOP = 16 // space above highest point for value labels
+  const PAD_BOT = 18 // space below chart for x-axis labels
+  const chartH = H - PAD_TOP - PAD_BOT
+  const chartW = data.length * PW
+  const totalW = Y_PAD + chartW
+
+  const toX = (i: number) => Y_PAD + i * PW + PW / 2
+  const toY = (v: number) => PAD_TOP + chartH - (v / max) * chartH
+
+  const xs = data.map((_, i) => toX(i))
+  const ys = data.map(d => toY(d.value))
+  const pts = xs.map((x, i) => `${x},${ys[i]}`).join(' ')
+  const area = `${xs[0]},${H - PAD_BOT} ${pts} ${xs[xs.length - 1]},${H - PAD_BOT}`
+
+  const fmt = (v: number) => v >= 1000 ? `${(v / 1000).toFixed(1)}k` : String(Math.round(v))
+  const guides = [max, Math.round(max / 2), 0]
 
   return (
     <div className="overflow-x-auto">
-      <div style={{ minWidth: totalW }}>
-        <svg viewBox={`0 0 ${totalW} ${H}`} width={totalW} height={H} style={{ display: 'block' }}>
-          <defs>
-            <linearGradient id={`grad-${color.replace('#', '')}`} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor={color} stopOpacity="0.25" />
-              <stop offset="100%" stopColor={color} stopOpacity="0.02" />
-            </linearGradient>
-          </defs>
-          <polygon points={areaPoints} fill={`url(#grad-${color.replace('#', '')})`} />
-          <polyline points={points} fill="none" stroke={color} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
-          {data.map((d, i) => (
-            <g key={i}>
-              <circle cx={xs[i]} cy={ys[i]} r={4} fill={color} stroke="#1e293b" strokeWidth="2" />
-              <title>{d.label}: {d.value.toLocaleString()} {unit}</title>
+      <svg viewBox={`0 0 ${totalW} ${H}`} width={totalW} height={H} style={{ display: 'block', minWidth: totalW }}>
+        <defs>
+          <linearGradient id={`g${color.replace('#', '')}`} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={color} stopOpacity="0.2" />
+            <stop offset="100%" stopColor={color} stopOpacity="0.02" />
+          </linearGradient>
+        </defs>
+
+        {/* Y-axis guide lines + labels */}
+        {guides.map(v => {
+          const y = toY(v)
+          return (
+            <g key={v}>
+              <line x1={Y_PAD} y1={y} x2={totalW} y2={y} stroke="#1e293b" strokeWidth="1" strokeDasharray="3,3" />
+              <text x={Y_PAD - 4} y={y + 3.5} textAnchor="end" fill="#64748b" fontSize="9.5">
+                {fmt(v)}
+              </text>
             </g>
-          ))}
-        </svg>
-        <div className="flex" style={{ width: totalW }}>
-          {data.map((d, i) => (
-            <div key={i} className="text-center" style={{ width: PW }}>
-              <span className="text-[9px] text-slate-500 whitespace-nowrap">{d.label}</span>
-            </div>
-          ))}
-        </div>
-      </div>
+          )
+        })}
+
+        {/* Area fill */}
+        <polygon points={area} fill={`url(#g${color.replace('#', '')})`} />
+
+        {/* Line */}
+        <polyline points={pts} fill="none" stroke={color} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
+
+        {/* Dots + value labels */}
+        {data.map((d, i) => (
+          <g key={i}>
+            <circle cx={xs[i]} cy={ys[i]} r={4} fill={color} stroke="#0f172a" strokeWidth="2" />
+            {(i === data.length - 1 || data.length <= 7) && (
+              <text x={xs[i]} y={ys[i] - 8} textAnchor="middle" fill={color} fontSize="9" fontWeight="700">
+                {fmt(d.value)}
+              </text>
+            )}
+            <title>{d.label}: {d.value.toLocaleString()} {unit}</title>
+          </g>
+        ))}
+
+        {/* X-axis labels */}
+        {data.map((d, i) => (
+          <text key={i} x={xs[i]} y={H - 4} textAnchor="middle" fill="#475569" fontSize="9">
+            {d.label}
+          </text>
+        ))}
+      </svg>
     </div>
   )
 }
