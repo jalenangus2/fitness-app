@@ -88,7 +88,7 @@ export default function MealPage() {
   const calChartData = useMemo(() => {
     return historyByDate.slice(0, 14).reverse().map(([dateKey, dayLogs]) => ({
       date: dateKey,
-      cals: Math.round(dayLogs.reduce((s, l) => s + l.calories, 0)),
+      cals: Math.round(dayLogs.reduce((s, l) => s + (l.calories ?? 0), 0)),
     }))
   }, [historyByDate])
 
@@ -105,12 +105,14 @@ export default function MealPage() {
   const macroAverages = useMemo(() => {
     if (!historyByDate.length) return null
     const days = historyByDate.map(([, dayLogs]) => ({
-      prot: dayLogs.reduce((s, l) => s + l.protein_g, 0),
-      carb: dayLogs.reduce((s, l) => s + l.carbs_g, 0),
-      fat: dayLogs.reduce((s, l) => s + l.fat_g, 0),
+      cals: dayLogs.reduce((s, l) => s + (l.calories ?? 0), 0),
+      prot: dayLogs.reduce((s, l) => s + (l.protein_g ?? 0), 0),
+      carb: dayLogs.reduce((s, l) => s + (l.carbs_g ?? 0), 0),
+      fat: dayLogs.reduce((s, l) => s + (l.fat_g ?? 0), 0),
     }))
     const n = days.length
     return {
+      cals: Math.round(days.reduce((s, d) => s + d.cals, 0) / n),
       prot: Math.round(days.reduce((s, d) => s + d.prot, 0) / n),
       carb: Math.round(days.reduce((s, d) => s + d.carb, 0) / n),
       fat: Math.round(days.reduce((s, d) => s + d.fat, 0) / n),
@@ -323,6 +325,22 @@ export default function MealPage() {
             <Card className="bg-slate-800 border-slate-700">
               <h2 className="text-base font-bold text-slate-100 mb-1">30-Day Macro Averages</h2>
               <p className="text-xs text-slate-500 mb-4">Daily average over {historyByDate.length} logged days</p>
+              <div className="flex items-center justify-between mb-4 p-3 rounded-lg bg-slate-700/50">
+                <div className="text-center">
+                  <p className="text-2xl font-bold text-emerald-400">{macroAverages.cals}</p>
+                  <p className="text-xs text-slate-500">avg kcal/day</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-sm font-semibold text-slate-300">{dailyTargets.cals}</p>
+                  <p className="text-xs text-slate-500">target</p>
+                </div>
+                <div className="text-center">
+                  <p className={`text-sm font-semibold ${macroAverages.cals >= dailyTargets.cals ? 'text-emerald-400' : 'text-amber-400'}`}>
+                    {macroAverages.cals >= dailyTargets.cals ? '+' : ''}{macroAverages.cals - dailyTargets.cals} kcal
+                  </p>
+                  <p className="text-xs text-slate-500">vs target</p>
+                </div>
+              </div>
               <div className="space-y-3">
                 <MacroAvgBar label="Protein" value={macroAverages.prot} target={dailyTargets.prot} color="#3b82f6" />
                 <MacroAvgBar label="Carbs" value={macroAverages.carb} target={dailyTargets.carb} color="#f59e0b" />
