@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
-import { format, parseISO } from 'date-fns'
-import { Plus, Zap, CheckCircle, Trash2, ChevronDown, Play, Timer, X, Minus, BarChart2, Dumbbell, ClipboardList, Pencil, Check, TrendingUp } from 'lucide-react'
+import { format, parseISO, startOfWeek } from 'date-fns'
+import { Plus, Zap, CheckCircle, Trash2, ChevronDown, Play, Timer, X, Minus, BarChart2, Dumbbell, ClipboardList, Pencil, Check, TrendingUp, LineChart as LineChartIcon } from 'lucide-react'
 import {
   useWorkouts, useCreateWorkout, useActivateWorkout, useDeactivateWorkout, useUpdateWorkout,
   useReplaceExercises, useDeleteWorkout, useStartSession, useLogSet, useFinishSession,
@@ -37,7 +37,7 @@ export default function WorkoutPage() {
   const finishSession = useFinishSession()
   const deleteSession = useDeleteSession()
 
-  const [activeTab, setActiveTab] = useState<'plans' | 'history'>('plans')
+  const [activeTab, setActiveTab] = useState<'plans' | 'history' | 'graphs'>('plans')
   const [showModal, setShowModal] = useState(false)
   const [showLogModal, setShowLogModal] = useState(false)
   const [showImport, setShowImport] = useState(false)
@@ -245,17 +245,34 @@ export default function WorkoutPage() {
   }, [sessions])
 
   const volumeByPlan = useMemo(() => {
-    const planMap: Record<string, { planName: string; data: { date: string; volume: number }[] }> = {}
+    const planMap: Record<string, { planName: string; dailyVol: Record<string, number> }> = {}
     const sorted = [...sessions].sort((a, b) => a.session_date.localeCompare(b.session_date))
     sorted.forEach(s => {
       const key = s.plan_id != null ? String(s.plan_id) : 'adhoc'
       const planName = s.plan_id ? (plans.find(p => p.id === s.plan_id)?.name ?? `Plan ${s.plan_id}`) : 'Ad-hoc'
-      if (!planMap[key]) planMap[key] = { planName, data: [] }
-      const volume = s.set_logs.reduce((a, l) => a + (l.reps ?? 0) * (l.weight_lbs ?? 0), 0)
-      planMap[key].data.push({ date: s.session_date, volume })
+      if (!planMap[key]) planMap[key] = { planName, dailyVol: {} }
+      const vol = s.set_logs.reduce((a, l) => a + (l.reps ?? 0) * (l.weight_lbs ?? 0), 0)
+      planMap[key].dailyVol[s.session_date] = (planMap[key].dailyVol[s.session_date] ?? 0) + vol
     })
-    return Object.values(planMap).filter(p => p.data.length >= 2)
+    return Object.values(planMap)
+      .map(p => ({
+        planName: p.planName,
+        data: Object.entries(p.dailyVol)
+          .sort(([a], [b]) => a.localeCompare(b))
+          .map(([date, volume]) => ({ date, volume })),
+      }))
+      .filter(p => p.data.length >= 2)
   }, [sessions, plans])
+
+  const workoutWeekData = useMemo(() => {
+    const weekCounts: Record<string, number> = {}
+    sessions.forEach(s => {
+      if (!s.session_date) return
+      const weekStart = format(startOfWeek(parseISO(s.session_date), { weekStartsOn: 1 }), 'yyyy-MM-dd')
+      weekCounts[weekStart] = (weekCounts[weekStart] || 0) + 1
+    })
+    return Object.entries(weekCounts).sort(([a], [b]) => a.localeCompare(b)).slice(-12).map(([week, count]) => ({ week, count }))
+  }, [sessions])
 
   // Last logged weight per exercise (most recent session first)
   const lastWeightMap = useMemo(() => {
@@ -372,7 +389,7 @@ export default function WorkoutPage() {
         {activeTab === 'plans' && (
           <Button onClick={() => setShowModal(true)}><Plus size={16} /> New Plan</Button>
         )}
-        {activeTab === 'history' && (
+        {(activeTab === 'history' || activeTab === 'graphs') && (
           <Button onClick={() => setShowLogModal(true)}><ClipboardList size={16} /> Log Workout</Button>
         )}
       </div>
@@ -380,12 +397,16 @@ export default function WorkoutPage() {
       {/* Tab bar */}
       <div className="flex bg-slate-800 p-1 rounded-xl w-full gap-1">
         <button onClick={() => setActiveTab('plans')}
-          className={`flex-1 flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === 'plans' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}>
+          className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === 'plans' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}>
           <Dumbbell size={14} /> Plans
         </button>
         <button onClick={() => setActiveTab('history')}
-          className={`flex-1 flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === 'history' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}>
-          <BarChart2 size={14} /> History
+          className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === 'history' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}>
+          <ClipboardList size={14} /> History
+        </button>
+        <button onClick={() => setActiveTab('graphs')}
+          className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === 'graphs' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}>
+          <LineChartIcon size={14} /> Graphs
         </button>
       </div>
 
@@ -494,49 +515,6 @@ export default function WorkoutPage() {
             </Card>
           )}
 
-          {/* Volume Progress by Plan */}
-          {volumeByPlan.length > 0 && (
-            <Card className="bg-slate-800 border-slate-700">
-              <h3 className="text-sm font-semibold text-slate-200 mb-1">Volume Progress</h3>
-              <p className="text-xs text-slate-500 mb-4">Total lbs lifted per session (reps × weight)</p>
-              <div className="space-y-5">
-                {volumeByPlan.map(({ planName, data }) => {
-                  const max = Math.max(...data.map(d => d.volume), 1)
-                  const BAR_H = 80
-                  return (
-                    <div key={planName}>
-                      <p className="text-xs font-medium text-slate-400 mb-2">{planName}</p>
-                      <div className="flex items-end gap-1 overflow-x-auto pb-1">
-                        {data.slice(-12).map((d, i, arr) => {
-                          const prev = arr[i - 1]
-                          const barH = Math.max(4, Math.round((d.volume / max) * BAR_H))
-                          const isUp = prev && d.volume > prev.volume
-                          const isDown = prev && d.volume < prev.volume
-                          const color = isUp ? '#10b981' : isDown ? '#f43f5e' : '#6366f1'
-                          return (
-                            <div key={i} className="flex flex-col items-center gap-0.5 min-w-[28px]">
-                              <div
-                                className="w-6 rounded-t transition-all"
-                                style={{ height: barH, backgroundColor: color }}
-                                title={`${format(parseISO(d.date), 'MMM d')}: ${d.volume.toLocaleString()} lbs`}
-                              />
-                              <span className="text-[8px] text-slate-600">{format(parseISO(d.date), 'M/d')}</span>
-                            </div>
-                          )
-                        })}
-                      </div>
-                      <div className="flex gap-3 mt-1 text-[10px] text-slate-500">
-                        <span className="flex items-center gap-0.5"><span className="w-2 h-2 rounded-sm bg-emerald-500 inline-block" /> Up</span>
-                        <span className="flex items-center gap-0.5"><span className="w-2 h-2 rounded-sm bg-rose-500 inline-block" /> Down</span>
-                        <span className="flex items-center gap-0.5"><span className="w-2 h-2 rounded-sm bg-indigo-500 inline-block" /> First</span>
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            </Card>
-          )}
-
           {sessions.length === 0 && (
             <Card className="text-center py-10">
               <BarChart2 size={32} className="mx-auto text-slate-600 mb-3" />
@@ -552,6 +530,51 @@ export default function WorkoutPage() {
               onDelete={() => deleteSession.mutateAsync(session.id)}
             />
           ))}
+        </div>
+      )}
+
+      {/* Graphs tab */}
+      {activeTab === 'graphs' && (
+        <div className="space-y-6">
+          {/* Workout Frequency */}
+          <Card className="bg-slate-800 border-slate-700">
+            <h3 className="text-base font-bold text-slate-100 mb-1">Workout Frequency</h3>
+            <p className="text-xs text-slate-500 mb-4">Sessions per week (last 12 weeks)</p>
+            {workoutWeekData.length === 0 ? (
+              <p className="text-sm text-slate-500 text-center py-8">No workout sessions recorded yet.</p>
+            ) : (
+              <LineChart
+                data={workoutWeekData.map(d => ({ label: format(parseISO(d.week), 'M/d'), value: d.count }))}
+                color="#6366f1"
+                unit="sessions"
+              />
+            )}
+          </Card>
+
+          {/* Volume Progress by Plan */}
+          {volumeByPlan.length === 0 ? (
+            <Card className="bg-slate-800 border-slate-700">
+              <h3 className="text-base font-bold text-slate-100 mb-1">Volume Progress</h3>
+              <p className="text-sm text-slate-500 text-center py-8">Log at least 2 sessions to see progress charts.</p>
+            </Card>
+          ) : (
+            <Card className="bg-slate-800 border-slate-700">
+              <h3 className="text-base font-bold text-slate-100 mb-1">Volume Progress</h3>
+              <p className="text-xs text-slate-500 mb-4">Total lbs lifted per day (reps × weight), by plan</p>
+              <div className="space-y-6">
+                {volumeByPlan.map(({ planName, data }) => (
+                  <div key={planName}>
+                    <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">{planName}</p>
+                    <LineChart
+                      data={data.slice(-16).map(d => ({ label: format(parseISO(d.date), 'M/d'), value: d.volume }))}
+                      color="#10b981"
+                      unit="lbs"
+                    />
+                  </div>
+                ))}
+              </div>
+            </Card>
+          )}
         </div>
       )}
 
@@ -799,6 +822,52 @@ export default function WorkoutPage() {
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
+function LineChart({ data, color, unit }: { data: { label: string; value: number }[]; color: string; unit: string }) {
+  if (data.length < 2) return <p className="text-xs text-slate-500 text-center py-4">Not enough data points yet.</p>
+  const max = Math.max(...data.map(d => d.value), 1)
+  const PW = 40
+  const H = 100
+  const PAD_TOP = 12
+  const PAD_BOT = 0
+  const chartH = H - PAD_TOP - PAD_BOT
+  const totalW = data.length * PW
+
+  const xs = data.map((_, i) => i * PW + PW / 2)
+  const ys = data.map(d => PAD_TOP + chartH - Math.max(0, (d.value / max) * chartH))
+  const points = xs.map((x, i) => `${x},${ys[i]}`).join(' ')
+  const areaPoints = `${xs[0]},${H} ${points} ${xs[xs.length - 1]},${H}`
+
+  return (
+    <div className="overflow-x-auto">
+      <div style={{ minWidth: totalW }}>
+        <svg viewBox={`0 0 ${totalW} ${H}`} width={totalW} height={H} style={{ display: 'block' }}>
+          <defs>
+            <linearGradient id={`grad-${color.replace('#', '')}`} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={color} stopOpacity="0.25" />
+              <stop offset="100%" stopColor={color} stopOpacity="0.02" />
+            </linearGradient>
+          </defs>
+          <polygon points={areaPoints} fill={`url(#grad-${color.replace('#', '')})`} />
+          <polyline points={points} fill="none" stroke={color} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
+          {data.map((d, i) => (
+            <g key={i}>
+              <circle cx={xs[i]} cy={ys[i]} r={4} fill={color} stroke="#1e293b" strokeWidth="2" />
+              <title>{d.label}: {d.value.toLocaleString()} {unit}</title>
+            </g>
+          ))}
+        </svg>
+        <div className="flex" style={{ width: totalW }}>
+          {data.map((d, i) => (
+            <div key={i} className="text-center" style={{ width: PW }}>
+              <span className="text-[9px] text-slate-500 whitespace-nowrap">{d.label}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function WorkoutPlanCard({ plan, expanded, onToggle, onActivate, onDeactivate, onDelete, onStart, onEdit, onRename }: any) {
   const [editing, setEditing] = useState(false)
   const [editName, setEditName] = useState(plan.name)
@@ -880,6 +949,21 @@ function WorkoutPlanCard({ plan, expanded, onToggle, onActivate, onDeactivate, o
 }
 
 function SessionCard({ session, expanded, onToggle, onDelete }: { session: WorkoutSession; expanded: boolean; onToggle: () => void; onDelete: () => void }) {
+  const logSet = useLogSet()
+  const [showAddSet, setShowAddSet] = useState(false)
+  const [addSetForm, setAddSetForm] = useState({ exercise_name: '', reps: 10, weight_lbs: 0 })
+
+  const handleAddSet = async () => {
+    if (!addSetForm.exercise_name.trim()) return
+    const existingCount = session.set_logs.filter(l => l.exercise_name === addSetForm.exercise_name.trim()).length
+    await logSet.mutateAsync({
+      sessionId: session.id,
+      data: { exercise_name: addSetForm.exercise_name.trim(), set_number: existingCount + 1, reps: addSetForm.reps, weight_lbs: addSetForm.weight_lbs },
+    })
+    setAddSetForm({ exercise_name: '', reps: 10, weight_lbs: 0 })
+    setShowAddSet(false)
+  }
+
   const setCount = session.set_logs.length
   const volume = session.set_logs.reduce((a, l) => a + (l.reps ?? 0) * (l.weight_lbs ?? 0), 0)
   const byExercise = session.set_logs.reduce<Record<string, typeof session.set_logs>>((acc, log) => {
@@ -928,6 +1012,45 @@ function SessionCard({ session, expanded, onToggle, onDelete }: { session: Worko
             </div>
           ))}
           {setCount === 0 && <p className="text-sm text-slate-500">No sets logged.</p>}
+
+          {/* Add set to finished session */}
+          {showAddSet ? (
+            <div className="mt-3 bg-slate-800 border border-slate-600 rounded-xl p-3 space-y-2">
+              <p className="text-xs font-semibold text-slate-300">Add Set</p>
+              <input
+                autoFocus
+                value={addSetForm.exercise_name}
+                onChange={e => setAddSetForm(f => ({ ...f, exercise_name: e.target.value }))}
+                placeholder="Exercise name"
+                className="w-full bg-slate-700 border border-slate-600 text-slate-100 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-indigo-500"
+              />
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <p className="text-xs text-slate-500 mb-1">Reps</p>
+                  <input type="number" min="1" value={addSetForm.reps} onChange={e => setAddSetForm(f => ({ ...f, reps: Number(e.target.value) }))}
+                    className="w-full bg-slate-700 border border-slate-600 text-slate-100 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-indigo-500" />
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500 mb-1">Weight (lbs)</p>
+                  <input type="number" min="0" value={addSetForm.weight_lbs} onChange={e => setAddSetForm(f => ({ ...f, weight_lbs: Number(e.target.value) }))}
+                    className="w-full bg-slate-700 border border-slate-600 text-slate-100 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-indigo-500" />
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <button onClick={() => setShowAddSet(false)} className="flex-1 py-1.5 rounded-lg bg-slate-700 text-slate-300 text-sm">Cancel</button>
+                <button onClick={handleAddSet} disabled={logSet.isPending} className="flex-1 py-1.5 rounded-lg bg-indigo-600 text-white text-sm font-medium disabled:opacity-50">
+                  {logSet.isPending ? 'Adding…' : 'Add Set'}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              onClick={() => setShowAddSet(true)}
+              className="w-full mt-3 flex items-center justify-center gap-2 py-2 rounded-lg border border-dashed border-slate-600 text-slate-400 hover:border-indigo-500 hover:text-indigo-400 transition-colors text-xs font-medium"
+            >
+              <Plus size={13} /> Add Set to This Session
+            </button>
+          )}
         </div>
       )}
     </Card>
