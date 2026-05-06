@@ -40,6 +40,7 @@ export default function WorkoutPage() {
   const shareWorkout = useShareWorkoutPlan()
 
   const [activeTab, setActiveTab] = useState<'plans' | 'history' | 'graphs'>('plans')
+  const [selectedExercise, setSelectedExercise] = useState<string>('')
   const [showModal, setShowModal] = useState(false)
   const [showLogModal, setShowLogModal] = useState(false)
   const [showImport, setShowImport] = useState(false)
@@ -570,29 +571,36 @@ export default function WorkoutPage() {
           </Card>
 
           {/* Exercise Progress */}
-          {exerciseProgress.length === 0 ? (
-            <Card className="bg-slate-800 border-slate-700">
-              <h3 className="text-base font-bold text-slate-100 mb-1">Exercise Progress</h3>
+          <Card className="bg-slate-800 border-slate-700">
+            <h3 className="text-base font-bold text-slate-100 mb-1">Exercise Progress</h3>
+            {exerciseProgress.length === 0 ? (
               <p className="text-sm text-slate-500 text-center py-8">Log weighted exercises across 2+ sessions to see progress.</p>
-            </Card>
-          ) : (
-            <Card className="bg-slate-800 border-slate-700">
-              <h3 className="text-base font-bold text-slate-100 mb-1">Exercise Progress</h3>
-              <p className="text-xs text-slate-500 mb-4">Max weight logged per exercise per day (lbs)</p>
-              <div className="space-y-6">
-                {exerciseProgress.map(({ name, data }) => (
-                  <div key={name}>
-                    <p className="text-xs font-semibold text-slate-300 mb-2">{name}</p>
-                    <LineChart
-                      data={data.slice(-16).map(d => ({ label: format(parseISO(d.date), 'M/d'), value: d.weight }))}
-                      color="#10b981"
-                      unit="lbs"
-                    />
-                  </div>
-                ))}
-              </div>
-            </Card>
-          )}
+            ) : (() => {
+              const active = selectedExercise && exerciseProgress.find(e => e.name === selectedExercise)
+                ? selectedExercise
+                : exerciseProgress[0].name
+              const ex = exerciseProgress.find(e => e.name === active)!
+              return (
+                <>
+                  <select
+                    value={active}
+                    onChange={e => setSelectedExercise(e.target.value)}
+                    className="w-full bg-slate-700 border border-slate-600 text-slate-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-500 mb-4"
+                  >
+                    {exerciseProgress.map(e => (
+                      <option key={e.name} value={e.name}>{e.name}</option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-slate-500 mb-3">Max weight per session (lbs) · {ex.data.length} data points</p>
+                  <LineChart
+                    data={ex.data.slice(-16).map(d => ({ label: format(parseISO(d.date), 'M/d'), value: d.weight }))}
+                    color="#10b981"
+                    unit="lbs"
+                  />
+                </>
+              )
+            })()}
+          </Card>
         </div>
       )}
 
