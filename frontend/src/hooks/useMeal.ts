@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import * as api from '../api/meal'
+import * as authApi from '../api/auth'
 import type { GenerateMealRequest } from '../types'
 
 export function useMealPlans() {
@@ -57,8 +58,11 @@ export function useDailyNutrition() {
 export function useLogNutrition() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (data: api.NutritionLog) => api.logNutrition(data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['nutrition-logs'] }),
+    mutationFn: (data: Parameters<typeof api.logNutrition>[0]) => api.logNutrition(data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['nutrition-logs'] })
+      qc.invalidateQueries({ queryKey: ['nutrition-history'] })
+    },
   })
 }
 
@@ -74,5 +78,17 @@ export function useNutritionHistory(days = 30) {
   return useQuery({
     queryKey: ['nutrition-history', days],
     queryFn: () => api.getNutritionHistory(days),
+  })
+}
+
+export function useCurrentUser() {
+  return useQuery({ queryKey: ['me'], queryFn: authApi.getMe })
+}
+
+export function useUpdateNutritionGoals() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (data: Parameters<typeof authApi.updateNutritionGoals>[0]) => authApi.updateNutritionGoals(data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['me'] }),
   })
 }

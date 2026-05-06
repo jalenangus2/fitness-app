@@ -45,7 +45,7 @@ export const generateMealPlan = (data: GenerateMealRequest) =>
 export const getDailyNutrition = () =>
   client.get<NutritionLog[]>('/meals/logs/today').then(r => r.data)
 
-export const logNutrition = (data: Omit<NutritionLog, 'id' | 'consumed_at'>) =>
+export const logNutrition = (data: Omit<NutritionLog, 'id' | 'consumed_at'> & { log_date?: string }) =>
   client.post<NutritionLog>('/meals/logs', data).then(r => r.data)
 
 export const searchFoods = (q: string) =>

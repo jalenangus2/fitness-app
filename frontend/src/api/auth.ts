@@ -30,3 +30,20 @@ export const getMe = async () => {
   const res = await client.get('/auth/me')
   return res.data
 }
+
+export const updateMe = async (data: { display_name: string | null }) => {
+  const res = await client.patch('/auth/me', data)
+  return res.data
+}
+
+export interface NutritionGoals {
+  nutrition_target_calories: number | null
+  nutrition_target_protein_g: number | null
+  nutrition_target_carbs_g: number | null
+  nutrition_target_fat_g: number | null
+}
+
+export const updateNutritionGoals = async (data: Partial<NutritionGoals>) => {
+  const res = await client.patch('/auth/me/goals', data)
+  return res.data as NutritionGoals & { id: number; email: string; username: string }
+}
