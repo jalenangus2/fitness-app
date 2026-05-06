@@ -257,27 +257,27 @@ export default function WorkoutPage() {
   }, [sessions])
 
   const exerciseProgress = useMemo(() => {
-    // Track max weight logged per exercise per day across all sessions
-    const exMap: Record<string, Record<string, number>> = {}
+    const exMap: Record<string, Record<string, { weight: number | null; reps: number }>> = {}
     const sorted = [...sessions].sort((a, b) => a.session_date.localeCompare(b.session_date))
     sorted.forEach(s => {
       s.set_logs.forEach(log => {
-        if (!log.weight_lbs || log.weight_lbs <= 0) return
         if (!exMap[log.exercise_name]) exMap[log.exercise_name] = {}
-        const prev = exMap[log.exercise_name][s.session_date] ?? 0
-        exMap[log.exercise_name][s.session_date] = Math.max(prev, log.weight_lbs)
+        const prev = exMap[log.exercise_name][s.session_date]
+        const w = log.weight_lbs && log.weight_lbs > 0 ? log.weight_lbs : null
+        exMap[log.exercise_name][s.session_date] = {
+          weight: w !== null ? Math.max(prev?.weight ?? 0, w) : (prev?.weight ?? null),
+          reps: (prev?.reps ?? 0) + (log.reps ?? 0),
+        }
       })
     })
     return Object.entries(exMap)
-      .map(([name, dateWeights]) => ({
+      .map(([name, dateData]) => ({
         name,
-        data: Object.entries(dateWeights)
+        data: Object.entries(dateData)
           .sort(([a], [b]) => a.localeCompare(b))
-          .map(([date, weight]) => ({ date, weight })),
+          .map(([date, vals]) => ({ date, ...vals })),
       }))
-      .filter(ex => ex.data.length >= 2)
       .sort((a, b) => b.data.length - a.data.length)
-      .slice(0, 10)
   }, [sessions])
 
   const workoutWeekData = useMemo(() => {
@@ -574,12 +574,13 @@ export default function WorkoutPage() {
           <Card className="bg-slate-800 border-slate-700">
             <h3 className="text-base font-bold text-slate-100 mb-1">Exercise Progress</h3>
             {exerciseProgress.length === 0 ? (
-              <p className="text-sm text-slate-500 text-center py-8">Log weighted exercises across 2+ sessions to see progress.</p>
+              <p className="text-sm text-slate-500 text-center py-8">Log some exercises to see progress.</p>
             ) : (() => {
               const active = selectedExercise && exerciseProgress.find(e => e.name === selectedExercise)
                 ? selectedExercise
                 : exerciseProgress[0].name
               const ex = exerciseProgress.find(e => e.name === active)!
+              const weightPoints = ex.data.filter(d => d.weight !== null)
               return (
                 <>
                   <select
@@ -591,12 +592,20 @@ export default function WorkoutPage() {
                       <option key={e.name} value={e.name}>{e.name}</option>
                     ))}
                   </select>
-                  <p className="text-xs text-slate-500 mb-3">Max weight per session (lbs) · {ex.data.length} data points</p>
-                  <LineChart
-                    data={ex.data.slice(-16).map(d => ({ label: format(parseISO(d.date), 'M/d'), value: d.weight }))}
-                    color="#10b981"
-                    unit="lbs"
-                  />
+                  {weightPoints.length >= 2 ? (
+                    <>
+                      <p className="text-xs text-slate-500 mb-3">Max weight per session (lbs) · {weightPoints.length} sessions</p>
+                      <LineChart
+                        data={weightPoints.slice(-16).map(d => ({ label: format(parseISO(d.date), 'M/d'), value: d.weight! }))}
+                        color="#10b981"
+                        unit="lbs"
+                      />
+                    </>
+                  ) : weightPoints.length === 1 ? (
+                    <p className="text-sm text-slate-500 text-center py-6">Only 1 session with weight logged — keep going to see a progress line.</p>
+                  ) : (
+                    <p className="text-sm text-slate-500 text-center py-6">No weight logged for this exercise. Add weight to sets to track progress.</p>
+                  )}
                 </>
               )
             })()}
