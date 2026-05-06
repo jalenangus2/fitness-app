@@ -1,12 +1,42 @@
-import { useParams } from 'react-router-dom'
-import { Zap, Timer } from 'lucide-react'
-import { useSharedWorkoutPlan } from '../hooks/useWorkout'
+import { useState } from 'react'
+import { useParams, useNavigate } from 'react-router-dom'
+import { Zap, Timer, Download, LogIn } from 'lucide-react'
+import { useSharedWorkoutPlan, useCreateWorkout } from '../hooks/useWorkout'
+import { useAuthStore } from '../store/authStore'
 import Card from '../components/ui/Card'
 import Spinner from '../components/ui/Spinner'
 
 export default function SharedWorkoutPlanPage() {
   const { token } = useParams<{ token: string }>()
+  const navigate = useNavigate()
+  const { token: authToken } = useAuthStore()
   const { data: plan, isLoading, isError } = useSharedWorkoutPlan(token ?? '')
+  const createWorkout = useCreateWorkout()
+  const [imported, setImported] = useState(false)
+
+  const handleImport = async () => {
+    if (!plan) return
+    await createWorkout.mutateAsync({
+      name: `${plan.name} (imported)`,
+      muscle_groups: plan.muscle_groups,
+      difficulty: plan.difficulty,
+      duration_mins: plan.duration_mins ?? undefined,
+      notes: plan.notes ?? undefined,
+      is_ai_generated: false,
+      exercises: plan.exercises.map((ex, i) => ({
+        name: ex.name,
+        sets: ex.sets ?? undefined,
+        reps: ex.reps ?? undefined,
+        weight_lbs: ex.weight_lbs ?? undefined,
+        duration_secs: ex.duration_secs ?? undefined,
+        rest_seconds: ex.rest_seconds ?? undefined,
+        notes: ex.notes ?? undefined,
+        order_index: i,
+      })),
+    } as any)
+    setImported(true)
+    setTimeout(() => navigate('/workout'), 1200)
+  }
 
   if (isLoading) return (
     <div className="min-h-screen bg-slate-900 flex items-center justify-center">
@@ -39,6 +69,28 @@ export default function SharedWorkoutPlanPage() {
             {plan.muscle_groups.map(mg => (
               <span key={mg} className="text-xs text-slate-300 bg-slate-700 px-2 py-0.5 rounded capitalize">{mg}</span>
             ))}
+          </div>
+
+          {/* Import button */}
+          <div className="pt-3">
+            {authToken ? (
+              <button
+                onClick={handleImport}
+                disabled={createWorkout.isPending || imported}
+                className="inline-flex items-center gap-2 px-5 py-2 rounded-lg bg-green-600 hover:bg-green-500 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-semibold text-white transition-colors"
+              >
+                {createWorkout.isPending ? <Spinner size="sm" /> : <Download size={15} />}
+                {imported ? 'Imported! Redirecting…' : createWorkout.isPending ? 'Importing…' : 'Import to My Account'}
+              </button>
+            ) : (
+              <button
+                onClick={() => navigate('/login')}
+                className="inline-flex items-center gap-2 px-5 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-sm font-semibold text-slate-200 transition-colors"
+              >
+                <LogIn size={15} />
+                Sign in to Import
+              </button>
+            )}
           </div>
         </div>
 

@@ -1,7 +1,8 @@
-import { useParams } from 'react-router-dom'
-import { format } from 'date-fns'
-import { Zap } from 'lucide-react'
-import { useSharedMealPlan } from '../hooks/useMeal'
+import { useState } from 'react'
+import { useParams, useNavigate } from 'react-router-dom'
+import { Zap, Download, LogIn } from 'lucide-react'
+import { useSharedMealPlan, useCreateMealPlan } from '../hooks/useMeal'
+import { useAuthStore } from '../store/authStore'
 import Card from '../components/ui/Card'
 import Badge from '../components/ui/Badge'
 import Spinner from '../components/ui/Spinner'
@@ -12,7 +13,42 @@ const GOAL_COLORS: Record<string, 'green' | 'blue' | 'yellow' | 'red' | 'indigo'
 
 export default function SharedMealPlanPage() {
   const { token } = useParams<{ token: string }>()
+  const navigate = useNavigate()
+  const { token: authToken } = useAuthStore()
   const { data: plan, isLoading, isError } = useSharedMealPlan(token ?? '')
+  const createPlan = useCreateMealPlan()
+  const [imported, setImported] = useState(false)
+
+  const handleImport = async () => {
+    if (!plan) return
+    await createPlan.mutateAsync({
+      name: `${plan.name} (imported)`,
+      goal: plan.goal,
+      target_calories: plan.target_calories,
+      target_protein_g: plan.target_protein_g,
+      target_carbs_g: plan.target_carbs_g,
+      target_fat_g: plan.target_fat_g,
+      duration_days: plan.duration_days,
+      is_ai_generated: false,
+      meals: plan.meals.map(m => ({
+        day_number: m.day_number,
+        meal_type: m.meal_type,
+        name: m.name,
+        calories: m.calories,
+        protein_g: m.protein_g,
+        carbs_g: m.carbs_g,
+        fat_g: m.fat_g,
+        recipe_notes: m.recipe_notes,
+        items: m.items.map(i => ({
+          ingredient_name: i.ingredient_name,
+          quantity: i.quantity,
+          category: i.category,
+        })),
+      })),
+    })
+    setImported(true)
+    setTimeout(() => navigate('/meal'), 1200)
+  }
 
   if (isLoading) return (
     <div className="min-h-screen bg-slate-900 flex items-center justify-center">
@@ -45,6 +81,28 @@ export default function SharedMealPlanPage() {
             {plan.goal && <Badge variant={GOAL_COLORS[plan.goal] ?? 'slate'}>{plan.goal.replace('_', ' ')}</Badge>}
             {plan.target_calories && <span className="text-xs text-slate-400 bg-slate-800 px-2 py-0.5 rounded">{plan.target_calories} kcal/day</span>}
             <span className="text-xs text-slate-400 bg-slate-800 px-2 py-0.5 rounded">{plan.duration_days} days</span>
+          </div>
+
+          {/* Import button */}
+          <div className="pt-3">
+            {authToken ? (
+              <button
+                onClick={handleImport}
+                disabled={createPlan.isPending || imported}
+                className="inline-flex items-center gap-2 px-5 py-2 rounded-lg bg-green-600 hover:bg-green-500 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-semibold text-white transition-colors"
+              >
+                {createPlan.isPending ? <Spinner size="sm" /> : <Download size={15} />}
+                {imported ? 'Imported! Redirecting…' : createPlan.isPending ? 'Importing…' : 'Import to My Account'}
+              </button>
+            ) : (
+              <button
+                onClick={() => navigate('/login')}
+                className="inline-flex items-center gap-2 px-5 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-sm font-semibold text-slate-200 transition-colors"
+              >
+                <LogIn size={15} />
+                Sign in to Import
+              </button>
+            )}
           </div>
         </div>
 
