@@ -244,6 +244,19 @@ export default function WorkoutPage() {
     return Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 5)
   }, [sessions])
 
+  const volumeByPlan = useMemo(() => {
+    const planMap: Record<string, { planName: string; data: { date: string; volume: number }[] }> = {}
+    const sorted = [...sessions].sort((a, b) => a.session_date.localeCompare(b.session_date))
+    sorted.forEach(s => {
+      const key = s.plan_id != null ? String(s.plan_id) : 'adhoc'
+      const planName = s.plan_id ? (plans.find(p => p.id === s.plan_id)?.name ?? `Plan ${s.plan_id}`) : 'Ad-hoc'
+      if (!planMap[key]) planMap[key] = { planName, data: [] }
+      const volume = s.set_logs.reduce((a, l) => a + (l.reps ?? 0) * (l.weight_lbs ?? 0), 0)
+      planMap[key].data.push({ date: s.session_date, volume })
+    })
+    return Object.values(planMap).filter(p => p.data.length >= 2)
+  }, [sessions, plans])
+
   // Last logged weight per exercise (most recent session first)
   const lastWeightMap = useMemo(() => {
     const map: Record<string, number> = {}
@@ -478,6 +491,49 @@ export default function WorkoutPage() {
                   ))}
                 </div>
               )}
+            </Card>
+          )}
+
+          {/* Volume Progress by Plan */}
+          {volumeByPlan.length > 0 && (
+            <Card className="bg-slate-800 border-slate-700">
+              <h3 className="text-sm font-semibold text-slate-200 mb-1">Volume Progress</h3>
+              <p className="text-xs text-slate-500 mb-4">Total lbs lifted per session (reps × weight)</p>
+              <div className="space-y-5">
+                {volumeByPlan.map(({ planName, data }) => {
+                  const max = Math.max(...data.map(d => d.volume), 1)
+                  const BAR_H = 80
+                  return (
+                    <div key={planName}>
+                      <p className="text-xs font-medium text-slate-400 mb-2">{planName}</p>
+                      <div className="flex items-end gap-1 overflow-x-auto pb-1">
+                        {data.slice(-12).map((d, i, arr) => {
+                          const prev = arr[i - 1]
+                          const barH = Math.max(4, Math.round((d.volume / max) * BAR_H))
+                          const isUp = prev && d.volume > prev.volume
+                          const isDown = prev && d.volume < prev.volume
+                          const color = isUp ? '#10b981' : isDown ? '#f43f5e' : '#6366f1'
+                          return (
+                            <div key={i} className="flex flex-col items-center gap-0.5 min-w-[28px]">
+                              <div
+                                className="w-6 rounded-t transition-all"
+                                style={{ height: barH, backgroundColor: color }}
+                                title={`${format(parseISO(d.date), 'MMM d')}: ${d.volume.toLocaleString()} lbs`}
+                              />
+                              <span className="text-[8px] text-slate-600">{format(parseISO(d.date), 'M/d')}</span>
+                            </div>
+                          )
+                        })}
+                      </div>
+                      <div className="flex gap-3 mt-1 text-[10px] text-slate-500">
+                        <span className="flex items-center gap-0.5"><span className="w-2 h-2 rounded-sm bg-emerald-500 inline-block" /> Up</span>
+                        <span className="flex items-center gap-0.5"><span className="w-2 h-2 rounded-sm bg-rose-500 inline-block" /> Down</span>
+                        <span className="flex items-center gap-0.5"><span className="w-2 h-2 rounded-sm bg-indigo-500 inline-block" /> First</span>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
             </Card>
           )}
 
