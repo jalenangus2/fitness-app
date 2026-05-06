@@ -17,6 +17,7 @@ class MealPlan(Base):
     duration_days: Mapped[int] = mapped_column(Integer, default=7)
     is_active: Mapped[bool] = mapped_column(Boolean, default=False)
     is_ai_generated: Mapped[bool] = mapped_column(Boolean, default=False)
+    share_token: Mapped[str] = mapped_column(String, nullable=True, unique=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

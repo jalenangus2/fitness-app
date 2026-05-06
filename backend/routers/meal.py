@@ -1,4 +1,5 @@
 """Meal plans router: CRUD + AI generation + Daily Logging."""
+import secrets
 from datetime import datetime, date, timedelta, time
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
@@ -36,7 +37,7 @@ def _serialize_meal_plan(plan: MealPlan) -> MealPlanResponse:
         target_protein_g=plan.target_protein_g, target_carbs_g=plan.target_carbs_g,
         target_fat_g=plan.target_fat_g, duration_days=plan.duration_days,
         is_active=plan.is_active, is_ai_generated=plan.is_ai_generated,
-        meals=meals_out, created_at=plan.created_at,
+        share_token=plan.share_token, meals=meals_out, created_at=plan.created_at,
     )
 
 # --- PLANS ---
@@ -97,6 +98,22 @@ def activate_meal_plan(plan_id: int, current_user: User = Depends(get_current_us
     plan.is_active = True
     db.commit()
     db.refresh(plan)
+    return _serialize_meal_plan(plan)
+
+@router.post("/plans/{plan_id}/share", response_model=MealPlanResponse)
+def share_meal_plan(plan_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    plan = db.query(MealPlan).filter(MealPlan.id == plan_id, MealPlan.user_id == current_user.id).first()
+    if not plan: raise HTTPException(status_code=404, detail="Meal plan not found")
+    if not plan.share_token:
+        plan.share_token = secrets.token_urlsafe(12)
+        db.commit()
+        db.refresh(plan)
+    return _serialize_meal_plan(plan)
+
+@router.get("/plans/shared/{token}", response_model=MealPlanResponse)
+def get_shared_meal_plan(token: str, db: Session = Depends(get_db)):
+    plan = db.query(MealPlan).filter(MealPlan.share_token == token).first()
+    if not plan: raise HTTPException(status_code=404, detail="Shared plan not found")
     return _serialize_meal_plan(plan)
 
 @router.post("/plans/generate", response_model=MealPlanResponse, status_code=status.HTTP_201_CREATED)

@@ -28,6 +28,7 @@ export interface WorkoutPlan {
   notes: string | null
   is_active: boolean
   is_ai_generated: boolean
+  share_token: string | null
   exercises: WorkoutExercise[]
   created_at: string
 }
@@ -70,6 +71,8 @@ export interface MealPlan {
   target_fat_g: number | null
   duration_days: number
   is_active: boolean
+  is_ai_generated: boolean
+  share_token: string | null
   meals: Meal[]
   created_at: string
 }

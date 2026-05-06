@@ -1,10 +1,10 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { format, parseISO } from 'date-fns'
-import { Plus, Zap, CheckCircle, Trash2, ChevronDown, Play, Timer, X, Minus, BarChart2, Dumbbell, ClipboardList, Pencil, Check, TrendingUp } from 'lucide-react'
+import { Plus, Zap, CheckCircle, Trash2, ChevronDown, Play, Timer, X, Minus, BarChart2, Dumbbell, ClipboardList, Pencil, Check, TrendingUp, Share2 } from 'lucide-react'
 import {
   useWorkouts, useCreateWorkout, useActivateWorkout, useDeactivateWorkout, useUpdateWorkout,
   useReplaceExercises, useDeleteWorkout, useStartSession, useLogSet, useFinishSession,
-  useWorkoutSessions, useDeleteSession, useUpdateSession,
+  useWorkoutSessions, useDeleteSession, useUpdateSession, useShareWorkoutPlan,
 } from '../hooks/useWorkout'
 import { useToast } from '../components/ui/Toast'
 import Card from '../components/ui/Card'
@@ -37,6 +37,7 @@ export default function WorkoutPage() {
   const finishSession = useFinishSession()
   const deleteSession = useDeleteSession()
   const updateSession = useUpdateSession()
+  const shareWorkout = useShareWorkoutPlan()
 
   const [activeTab, setActiveTab] = useState<'plans' | 'history'>('plans')
   const [showModal, setShowModal] = useState(false)
@@ -186,6 +187,15 @@ export default function WorkoutPage() {
       setActiveTab('history')
     } catch {
       toast('Failed to log workout. Please try again.', 'error')
+    }
+  }
+
+  const handleShareWorkout = async (planId: number, existingToken: string | null) => {
+    const token = existingToken ?? (await shareWorkout.mutateAsync(planId)).share_token
+    if (token) {
+      const url = `${window.location.origin}/shared/workout/${token}`
+      await navigator.clipboard.writeText(url)
+      toast('Share link copied!', 'success')
     }
   }
 
@@ -401,6 +411,7 @@ export default function WorkoutPage() {
               onDeactivate={() => deactivate.mutateAsync(plan.id!).then(() => toast('Plan deactivated.', 'info'))}
               onDelete={() => remove.mutateAsync(plan.id!)}
               onStart={() => handleStartWorkout(plan)}
+              onShare={() => handleShareWorkout(plan.id!, plan.share_token)}
               onEdit={() => { setEditingPlan(plan); setEditExercises(plan.exercises.map(ex => ({ ...ex }))); setEditMuscleGroups([...plan.muscle_groups]) }}
               onRename={(name: string) => updatePlan.mutateAsync({ id: plan.id!, data: { name } }).then(() => toast('Plan renamed!', 'success'))}
             />
@@ -746,7 +757,7 @@ export default function WorkoutPage() {
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
-function WorkoutPlanCard({ plan, expanded, onToggle, onActivate, onDeactivate, onDelete, onStart, onEdit, onRename }: any) {
+function WorkoutPlanCard({ plan, expanded, onToggle, onActivate, onDeactivate, onDelete, onStart, onShare, onEdit, onRename }: any) {
   const [editing, setEditing] = useState(false)
   const [editName, setEditName] = useState(plan.name)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -817,6 +828,7 @@ function WorkoutPlanCard({ plan, expanded, onToggle, onActivate, onDeactivate, o
           <div className="flex gap-2 pt-2">
             {!plan.is_active && <Button variant="secondary" size="sm" onClick={onActivate} className="flex-1">Set Active</Button>}
             {plan.is_active && <Button variant="ghost" size="sm" onClick={onDeactivate} className="flex-1 text-slate-400">Deactivate</Button>}
+            <Button variant="ghost" size="sm" onClick={onShare} className="text-slate-400 flex-none px-3" title="Copy share link"><Share2 size={14} /></Button>
             <Button variant="ghost" size="sm" onClick={onEdit} className="text-indigo-400 bg-indigo-500/10 flex-none px-3"><Pencil size={14} /></Button>
             <Button variant="ghost" size="sm" onClick={onDelete} className="text-red-400 bg-red-500/10 flex-none px-3"><Trash2 size={16} /></Button>
           </div>

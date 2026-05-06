@@ -92,3 +92,19 @@ export function useUpdateNutritionGoals() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['me'] }),
   })
 }
+
+export function useShareMealPlan() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: number) => api.shareMealPlan(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['meal-plans'] }),
+  })
+}
+
+export function useSharedMealPlan(token: string) {
+  return useQuery({
+    queryKey: ['shared-meal-plan', token],
+    queryFn: () => api.getSharedMealPlan(token),
+    enabled: !!token,
+  })
+}

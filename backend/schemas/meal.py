@@ -60,6 +60,7 @@ class MealPlanResponse(MealPlanBase):
     model_config = ConfigDict(from_attributes=True)
     id: int
     is_active: bool
+    share_token: Optional[str] = None
     meals: List[MealResponse] = []
     created_at: datetime
 

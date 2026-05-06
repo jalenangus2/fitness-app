@@ -53,3 +53,9 @@ export const searchFoods = (q: string) =>
 
 export const getNutritionHistory = (days = 30) =>
   client.get<NutritionLog[]>('/meals/logs/history', { params: { days } }).then(r => r.data)
+
+export const shareMealPlan = (id: number) =>
+  client.post<MealPlan>(`/meals/plans/${id}/share`).then(r => r.data)
+
+export const getSharedMealPlan = (token: string) =>
+  client.get<MealPlan>(`/meals/plans/shared/${token}`).then(r => r.data)

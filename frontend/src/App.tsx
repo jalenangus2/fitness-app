@@ -11,6 +11,8 @@ import ShoppingPage from './pages/ShoppingPage'
 import SchedulePage from './pages/SchedulePage'
 import FashionPage from './pages/FashionPage'
 import FinancePage from './pages/FinancePage'
+import SharedMealPlanPage from './pages/SharedMealPlanPage'
+import SharedWorkoutPlanPage from './pages/SharedWorkoutPlanPage'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -22,6 +24,8 @@ const router = createBrowserRouter([
   { path: '/', element: <Navigate to="/dashboard" replace /> },
   { path: '/login', element: <LoginPage /> },
   { path: '/register', element: <RegisterPage /> },
+  { path: '/shared/meal/:token', element: <SharedMealPlanPage /> },
+  { path: '/shared/workout/:token', element: <SharedWorkoutPlanPage /> },
   {
     element: <AppShell />,
     children: [

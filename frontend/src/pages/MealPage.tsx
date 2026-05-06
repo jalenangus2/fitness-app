@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react'
 import { format, parseISO, startOfWeek } from 'date-fns'
-import { Plus, Zap, CheckCircle, Trash2, ChevronDown, ShoppingCart, Search, Pencil, BarChart2, Dumbbell } from 'lucide-react'
-import { useMealPlans, useCreateMealPlan, useUpdateMealPlan, useActivateMealPlan, useDeleteMealPlan, useDailyNutrition, useLogNutrition, useSearchFoods, useNutritionHistory, useCurrentUser, useUpdateNutritionGoals } from '../hooks/useMeal'
+import { Plus, Zap, CheckCircle, Trash2, ChevronDown, ShoppingCart, Search, Pencil, BarChart2, Dumbbell, Share2 } from 'lucide-react'
+import { useMealPlans, useCreateMealPlan, useUpdateMealPlan, useActivateMealPlan, useDeleteMealPlan, useDailyNutrition, useLogNutrition, useSearchFoods, useNutritionHistory, useCurrentUser, useUpdateNutritionGoals, useShareMealPlan } from '../hooks/useMeal'
 import { useWorkoutSessions } from '../hooks/useWorkout'
 import { useCreateShoppingList } from '../hooks/useShopping'
 import { useToast } from '../components/ui/Toast'
@@ -25,6 +25,7 @@ export default function MealPage() {
   const createManual = useCreateMealPlan()
   const updatePlan = useUpdateMealPlan()
   const updateGoals = useUpdateNutritionGoals()
+  const sharePlan = useShareMealPlan()
   const activate = useActivateMealPlan()
   const remove = useDeleteMealPlan()
   const createList = useCreateShoppingList()
@@ -124,6 +125,15 @@ export default function MealPage() {
       target_fat_g: dailyTargets.fat,
     })
     setShowGoalsModal(true)
+  }
+
+  const handleSharePlan = async (planId: number, existingToken: string | null) => {
+    const token = existingToken ?? (await sharePlan.mutateAsync(planId)).share_token
+    if (token) {
+      const url = `${window.location.origin}/shared/meal/${token}`
+      await navigator.clipboard.writeText(url)
+      toast('Share link copied!', 'success')
+    }
   }
 
   const openLogOnDate = (dateKey: string) => {
@@ -228,6 +238,7 @@ export default function MealPage() {
                 onDayChange={setExpandedDay}
                 onActivate={() => activate.mutateAsync(plan.id!).then(() => toast('Meal plan activated!', 'success'))}
                 onDelete={() => remove.mutateAsync(plan.id!).then(() => toast('Meal plan deleted.', 'info'))}
+                onShare={() => handleSharePlan(plan.id!, plan.share_token)}
                 onCreateShoppingList={() => createList.mutateAsync({ name: `${plan.name} Shopping List`, meal_plan_id: plan.id }).then(() => toast('Shopping List created!', 'success'))}
               />
             ))}
@@ -519,7 +530,7 @@ function BarChart({ data, color, target, unit }: { data: { label: string; value:
   )
 }
 
-function MealPlanCard({ plan, expanded, expandedDay, onToggle, onDayChange, onActivate, onDelete, onCreateShoppingList }: any) {
+function MealPlanCard({ plan, expanded, expandedDay, onToggle, onDayChange, onActivate, onDelete, onShare, onCreateShoppingList }: any) {
   const days = Array.from(new Set((plan.meals || []).map((m: any) => m.day_number))).sort((a: any, b: any) => a - b)
 
   return (
@@ -536,6 +547,7 @@ function MealPlanCard({ plan, expanded, expandedDay, onToggle, onDayChange, onAc
           </div>
         </div>
         <div className="flex items-center gap-1">
+          <Button variant="ghost" size="sm" onClick={onShare} title="Copy share link"><Share2 size={14} /></Button>
           <Button variant="ghost" size="sm" onClick={onCreateShoppingList}><ShoppingCart size={14} /></Button>
           {!plan.is_active && <Button variant="ghost" size="sm" onClick={onActivate}><CheckCircle size={15} /> Set Active</Button>}
           <button onClick={onToggle} className="p-2 text-slate-400"><ChevronDown size={18} className={expanded ? "rotate-180 transition-transform" : "transition-transform"} /></button>
