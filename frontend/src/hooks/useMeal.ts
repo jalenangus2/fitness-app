@@ -58,7 +58,7 @@ export function useDailyNutrition() {
 export function useLogNutrition() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (data: api.NutritionLog) => api.logNutrition(data),
+    mutationFn: (data: Parameters<typeof api.logNutrition>[0]) => api.logNutrition(data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['nutrition-logs'] })
       qc.invalidateQueries({ queryKey: ['nutrition-history'] })
@@ -90,5 +90,21 @@ export function useUpdateNutritionGoals() {
   return useMutation({
     mutationFn: (data: Parameters<typeof authApi.updateNutritionGoals>[0]) => authApi.updateNutritionGoals(data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['me'] }),
+  })
+}
+
+export function useShareMealPlan() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: number) => api.shareMealPlan(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['meal-plans'] }),
+  })
+}
+
+export function useSharedMealPlan(token: string) {
+  return useQuery({
+    queryKey: ['shared-meal-plan', token],
+    queryFn: () => api.getSharedMealPlan(token),
+    enabled: !!token,
   })
 }

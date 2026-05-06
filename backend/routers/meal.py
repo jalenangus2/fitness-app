@@ -1,5 +1,6 @@
 """Meal plans router: CRUD + AI generation + Daily Logging."""
-from datetime import datetime, date, timedelta
+import secrets
+from datetime import datetime, date, timedelta, time
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
@@ -36,7 +37,7 @@ def _serialize_meal_plan(plan: MealPlan) -> MealPlanResponse:
         target_protein_g=plan.target_protein_g, target_carbs_g=plan.target_carbs_g,
         target_fat_g=plan.target_fat_g, duration_days=plan.duration_days,
         is_active=plan.is_active, is_ai_generated=plan.is_ai_generated,
-        meals=meals_out, created_at=plan.created_at,
+        share_token=plan.share_token, meals=meals_out, created_at=plan.created_at,
     )
 
 # --- PLANS ---
@@ -99,6 +100,22 @@ def activate_meal_plan(plan_id: int, current_user: User = Depends(get_current_us
     db.refresh(plan)
     return _serialize_meal_plan(plan)
 
+@router.post("/plans/{plan_id}/share", response_model=MealPlanResponse)
+def share_meal_plan(plan_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    plan = db.query(MealPlan).filter(MealPlan.id == plan_id, MealPlan.user_id == current_user.id).first()
+    if not plan: raise HTTPException(status_code=404, detail="Meal plan not found")
+    if not plan.share_token:
+        plan.share_token = secrets.token_urlsafe(12)
+        db.commit()
+        db.refresh(plan)
+    return _serialize_meal_plan(plan)
+
+@router.get("/plans/shared/{token}", response_model=MealPlanResponse)
+def get_shared_meal_plan(token: str, db: Session = Depends(get_db)):
+    plan = db.query(MealPlan).filter(MealPlan.share_token == token).first()
+    if not plan: raise HTTPException(status_code=404, detail="Shared plan not found")
+    return _serialize_meal_plan(plan)
+
 @router.post("/plans/generate", response_model=MealPlanResponse, status_code=status.HTTP_201_CREATED)
 def generate_meal_plan(data: GenerateMealRequest, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     generated = claude_service.generate_meal_plan(
@@ -156,7 +173,9 @@ def get_daily_nutrition(current_user: User = Depends(get_current_user), db: Sess
 
 @router.post("/logs", response_model=NutritionLogResponse)
 def log_nutrition(data: NutritionLogCreate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    log = NutritionLog(user_id=current_user.id, **data.dict())
+    log_data = data.model_dump(exclude={'log_date'})
+    consumed_at = datetime.combine(data.log_date, time(12, 0)) if data.log_date else datetime.utcnow()
+    log = NutritionLog(user_id=current_user.id, consumed_at=consumed_at, **log_data)
     db.add(log)
     db.commit()
     db.refresh(log)

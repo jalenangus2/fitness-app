@@ -1,10 +1,10 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
-import { format, parseISO } from 'date-fns'
-import { Plus, Zap, CheckCircle, Trash2, ChevronDown, Play, Timer, X, Minus, BarChart2, Dumbbell, ClipboardList, Pencil, Check, TrendingUp } from 'lucide-react'
+import { format, parseISO, startOfWeek } from 'date-fns'
+import { Plus, Zap, CheckCircle, Trash2, ChevronDown, Play, Timer, X, Minus, BarChart2, Dumbbell, ClipboardList, Pencil, Check, TrendingUp, Share2, LineChart as LineChartIcon } from 'lucide-react'
 import {
   useWorkouts, useCreateWorkout, useActivateWorkout, useDeactivateWorkout, useUpdateWorkout,
   useReplaceExercises, useDeleteWorkout, useStartSession, useLogSet, useFinishSession,
-  useWorkoutSessions, useDeleteSession, useUpdateSession,
+  useWorkoutSessions, useDeleteSession, useUpdateSession, useShareWorkoutPlan,
 } from '../hooks/useWorkout'
 import { useToast } from '../components/ui/Toast'
 import Card from '../components/ui/Card'
@@ -37,8 +37,9 @@ export default function WorkoutPage() {
   const finishSession = useFinishSession()
   const deleteSession = useDeleteSession()
   const updateSession = useUpdateSession()
+  const shareWorkout = useShareWorkoutPlan()
 
-  const [activeTab, setActiveTab] = useState<'plans' | 'history'>('plans')
+  const [activeTab, setActiveTab] = useState<'plans' | 'history' | 'graphs'>('plans')
   const [showModal, setShowModal] = useState(false)
   const [showLogModal, setShowLogModal] = useState(false)
   const [showImport, setShowImport] = useState(false)
@@ -55,6 +56,10 @@ export default function WorkoutPage() {
   const [editMuscleGroups, setEditMuscleGroups] = useState<string[]>([])
   const [showPushModal, setShowPushModal] = useState(false)
   const [pushCount, setPushCount] = useState(20)
+
+  const [extraExercises, setExtraExercises] = useState<Partial<WorkoutExercise>[]>([])
+  const [showAddExInWorkout, setShowAddExInWorkout] = useState(false)
+  const [addExForm, setAddExForm] = useState({ name: '', sets: 3, reps: '10', weight_lbs: 0 })
 
   const [form, setForm] = useState({ name: '', muscle_groups: [] as string[], difficulty: 'intermediate', duration_mins: 45, notes: '' })
   const [manualExercises, setManualExercises] = useState<Partial<WorkoutExercise>[]>([])
@@ -130,6 +135,8 @@ export default function WorkoutPage() {
       plan_id: plan.id,
     })
     setActiveSession({ id: session.id, plan, startedAt: Date.now() })
+    setExtraExercises([])
+    setShowAddExInWorkout(false)
     toast("Workout started! Let's go!", 'success')
   }
 
@@ -180,6 +187,15 @@ export default function WorkoutPage() {
       setActiveTab('history')
     } catch {
       toast('Failed to log workout. Please try again.', 'error')
+    }
+  }
+
+  const handleShareWorkout = async (planId: number, existingToken: string | null) => {
+    const token = existingToken ?? (await shareWorkout.mutateAsync(planId)).share_token
+    if (token) {
+      const url = `${window.location.origin}/shared/workout/${token}`
+      await navigator.clipboard.writeText(url)
+      toast('Share link copied!', 'success')
     }
   }
 
@@ -239,6 +255,50 @@ export default function WorkoutPage() {
     return Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 5)
   }, [sessions])
 
+  const volumeByPlan = useMemo(() => {
+    const planMap: Record<string, { planName: string; dailyVol: Record<string, number> }> = {}
+    const sorted = [...sessions].sort((a, b) => a.session_date.localeCompare(b.session_date))
+    sorted.forEach(s => {
+      const key = s.plan_id != null ? String(s.plan_id) : 'adhoc'
+      const planName = s.plan_id ? (plans.find(p => p.id === s.plan_id)?.name ?? `Plan ${s.plan_id}`) : 'Ad-hoc'
+      if (!planMap[key]) planMap[key] = { planName, dailyVol: {} }
+      const vol = s.set_logs.reduce((a, l) => a + (l.reps ?? 0) * (l.weight_lbs ?? 0), 0)
+      planMap[key].dailyVol[s.session_date] = (planMap[key].dailyVol[s.session_date] ?? 0) + vol
+    })
+    return Object.values(planMap)
+      .map(p => ({
+        planName: p.planName,
+        data: Object.entries(p.dailyVol)
+          .sort(([a], [b]) => a.localeCompare(b))
+          .map(([date, volume]) => ({ date, volume })),
+      }))
+      .filter(p => p.data.length >= 2)
+  }, [sessions, plans])
+
+  const workoutWeekData = useMemo(() => {
+    const weekCounts: Record<string, number> = {}
+    sessions.forEach(s => {
+      if (!s.session_date) return
+      const weekStart = format(startOfWeek(parseISO(s.session_date), { weekStartsOn: 1 }), 'yyyy-MM-dd')
+      weekCounts[weekStart] = (weekCounts[weekStart] || 0) + 1
+    })
+    return Object.entries(weekCounts).sort(([a], [b]) => a.localeCompare(b)).slice(-12).map(([week, count]) => ({ week, count }))
+  }, [sessions])
+
+  // Last logged weight per exercise (most recent session first)
+  const lastWeightMap = useMemo(() => {
+    const map: Record<string, number> = {}
+    const sorted = [...sessions].sort((a, b) => b.session_date.localeCompare(a.session_date))
+    sorted.forEach(s => {
+      s.set_logs.forEach(l => {
+        if (l.weight_lbs && l.weight_lbs > 0 && !map[l.exercise_name]) {
+          map[l.exercise_name] = l.weight_lbs
+        }
+      })
+    })
+    return map
+  }, [sessions])
+
   // Active workout full-screen view
   if (activeSession) {
     return (
@@ -256,13 +316,71 @@ export default function WorkoutPage() {
             <Button variant="ghost" size="sm" onClick={() => setRestTimer(0)}><Timer size={16} className="text-slate-500" /></Button>
           )}
         </div>
-        <div className="flex-1 overflow-y-auto p-4 space-y-6 pb-24">
+        <div className="flex-1 overflow-y-auto p-4 space-y-6 pb-32">
           {activeSession.plan.exercises.map((ex, i) => (
             <ActiveExerciseCard
               key={i} exercise={ex}
+              lastWeight={lastWeightMap[ex.name]}
               onLogSet={(setNum, reps, weight, durationSecs) => handleLogSet(ex.name, setNum, reps, weight, ex.rest_seconds || 60, durationSecs)}
             />
           ))}
+          {extraExercises.map((ex, i) => (
+            <ActiveExerciseCard
+              key={`extra-${i}`} exercise={ex as WorkoutExercise}
+              lastWeight={lastWeightMap[ex.name || '']}
+              onLogSet={(setNum, reps, weight, durationSecs) => handleLogSet(ex.name || '', setNum, reps, weight, 60, durationSecs)}
+            />
+          ))}
+
+          {/* Add Exercise inline form */}
+          {showAddExInWorkout ? (
+            <div className="bg-slate-800 border border-slate-600 rounded-xl p-4 space-y-3">
+              <p className="text-sm font-semibold text-slate-200">Add Exercise</p>
+              <input
+                autoFocus
+                value={addExForm.name}
+                onChange={e => setAddExForm(f => ({ ...f, name: e.target.value }))}
+                placeholder="Exercise name (e.g. Cable Row)"
+                className="w-full bg-slate-700 border border-slate-600 text-slate-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-500"
+              />
+              <div className="grid grid-cols-3 gap-2">
+                <div>
+                  <p className="text-xs text-slate-500 mb-1">Sets</p>
+                  <input type="number" min="1" value={addExForm.sets} onChange={e => setAddExForm(f => ({ ...f, sets: Number(e.target.value) }))}
+                    className="w-full bg-slate-700 border border-slate-600 text-slate-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-500" />
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500 mb-1">Reps</p>
+                  <input type="text" value={addExForm.reps} onChange={e => setAddExForm(f => ({ ...f, reps: e.target.value }))}
+                    className="w-full bg-slate-700 border border-slate-600 text-slate-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-500" />
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500 mb-1">Wt (lbs)</p>
+                  <input type="number" min="0" value={addExForm.weight_lbs} onChange={e => setAddExForm(f => ({ ...f, weight_lbs: Number(e.target.value) }))}
+                    className="w-full bg-slate-700 border border-slate-600 text-slate-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-500" />
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <button onClick={() => setShowAddExInWorkout(false)} className="flex-1 py-2 rounded-lg bg-slate-700 text-slate-300 text-sm">Cancel</button>
+                <button
+                  onClick={() => {
+                    if (!addExForm.name.trim()) return
+                    setExtraExercises(prev => [...prev, { name: addExForm.name.trim(), sets: addExForm.sets, reps: addExForm.reps, weight_lbs: addExForm.weight_lbs }])
+                    setAddExForm({ name: '', sets: 3, reps: '10', weight_lbs: 0 })
+                    setShowAddExInWorkout(false)
+                  }}
+                  className="flex-1 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium"
+                >Add</button>
+              </div>
+            </div>
+          ) : (
+            <button
+              onClick={() => setShowAddExInWorkout(true)}
+              className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border border-dashed border-slate-600 text-slate-400 hover:border-indigo-500 hover:text-indigo-400 transition-colors text-sm font-medium"
+            >
+              <Plus size={15} /> Add Exercise
+            </button>
+          )}
         </div>
         <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-slate-900 via-slate-900 to-transparent">
           <Button onClick={handleFinishWorkout} className="w-full py-4 text-lg shadow-xl shadow-indigo-500/20">
@@ -282,7 +400,7 @@ export default function WorkoutPage() {
         {activeTab === 'plans' && (
           <Button onClick={() => setShowModal(true)}><Plus size={16} /> New Plan</Button>
         )}
-        {activeTab === 'history' && (
+        {(activeTab === 'history' || activeTab === 'graphs') && (
           <Button onClick={() => setShowLogModal(true)}><ClipboardList size={16} /> Log Workout</Button>
         )}
       </div>
@@ -290,12 +408,16 @@ export default function WorkoutPage() {
       {/* Tab bar */}
       <div className="flex bg-slate-800 p-1 rounded-xl w-full gap-1">
         <button onClick={() => setActiveTab('plans')}
-          className={`flex-1 flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === 'plans' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}>
+          className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === 'plans' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}>
           <Dumbbell size={14} /> Plans
         </button>
         <button onClick={() => setActiveTab('history')}
-          className={`flex-1 flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === 'history' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}>
-          <BarChart2 size={14} /> History
+          className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === 'history' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}>
+          <ClipboardList size={14} /> History
+        </button>
+        <button onClick={() => setActiveTab('graphs')}
+          className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === 'graphs' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}>
+          <LineChartIcon size={14} /> Graphs
         </button>
       </div>
 
@@ -323,6 +445,7 @@ export default function WorkoutPage() {
               onDeactivate={() => deactivate.mutateAsync(plan.id!).then(() => toast('Plan deactivated.', 'info'))}
               onDelete={() => remove.mutateAsync(plan.id!)}
               onStart={() => handleStartWorkout(plan)}
+              onShare={() => handleShareWorkout(plan.id!, plan.share_token)}
               onEdit={() => { setEditingPlan(plan); setEditExercises(plan.exercises.map(ex => ({ ...ex }))); setEditMuscleGroups([...plan.muscle_groups]) }}
               onRename={(name: string) => updatePlan.mutateAsync({ id: plan.id!, data: { name } }).then(() => toast('Plan renamed!', 'success'))}
             />
@@ -421,6 +544,51 @@ export default function WorkoutPage() {
               onAttachPlan={(id: number, planId: number) => updateSession.mutate({ id, data: { plan_id: planId } })}
             />
           ))}
+        </div>
+      )}
+
+      {/* Graphs tab */}
+      {activeTab === 'graphs' && (
+        <div className="space-y-6">
+          {/* Workout Frequency */}
+          <Card className="bg-slate-800 border-slate-700">
+            <h3 className="text-base font-bold text-slate-100 mb-1">Workout Frequency</h3>
+            <p className="text-xs text-slate-500 mb-4">Sessions per week (last 12 weeks)</p>
+            {workoutWeekData.length === 0 ? (
+              <p className="text-sm text-slate-500 text-center py-8">No workout sessions recorded yet.</p>
+            ) : (
+              <LineChart
+                data={workoutWeekData.map(d => ({ label: format(parseISO(d.week), 'M/d'), value: d.count }))}
+                color="#6366f1"
+                unit="sessions"
+              />
+            )}
+          </Card>
+
+          {/* Volume Progress by Plan */}
+          {volumeByPlan.length === 0 ? (
+            <Card className="bg-slate-800 border-slate-700">
+              <h3 className="text-base font-bold text-slate-100 mb-1">Volume Progress</h3>
+              <p className="text-sm text-slate-500 text-center py-8">Log at least 2 sessions to see progress charts.</p>
+            </Card>
+          ) : (
+            <Card className="bg-slate-800 border-slate-700">
+              <h3 className="text-base font-bold text-slate-100 mb-1">Volume Progress</h3>
+              <p className="text-xs text-slate-500 mb-4">Total lbs lifted per day (reps × weight), by plan</p>
+              <div className="space-y-6">
+                {volumeByPlan.map(({ planName, data }) => (
+                  <div key={planName}>
+                    <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">{planName}</p>
+                    <LineChart
+                      data={data.slice(-16).map(d => ({ label: format(parseISO(d.date), 'M/d'), value: d.volume }))}
+                      color="#10b981"
+                      unit="lbs"
+                    />
+                  </div>
+                ))}
+              </div>
+            </Card>
+          )}
         </div>
       )}
 
@@ -668,7 +836,53 @@ export default function WorkoutPage() {
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
-function WorkoutPlanCard({ plan, expanded, onToggle, onActivate, onDeactivate, onDelete, onStart, onEdit, onRename }: any) {
+function LineChart({ data, color, unit }: { data: { label: string; value: number }[]; color: string; unit: string }) {
+  if (data.length < 2) return <p className="text-xs text-slate-500 text-center py-4">Not enough data points yet.</p>
+  const max = Math.max(...data.map(d => d.value), 1)
+  const PW = 40
+  const H = 100
+  const PAD_TOP = 12
+  const PAD_BOT = 0
+  const chartH = H - PAD_TOP - PAD_BOT
+  const totalW = data.length * PW
+
+  const xs = data.map((_, i) => i * PW + PW / 2)
+  const ys = data.map(d => PAD_TOP + chartH - Math.max(0, (d.value / max) * chartH))
+  const points = xs.map((x, i) => `${x},${ys[i]}`).join(' ')
+  const areaPoints = `${xs[0]},${H} ${points} ${xs[xs.length - 1]},${H}`
+
+  return (
+    <div className="overflow-x-auto">
+      <div style={{ minWidth: totalW }}>
+        <svg viewBox={`0 0 ${totalW} ${H}`} width={totalW} height={H} style={{ display: 'block' }}>
+          <defs>
+            <linearGradient id={`grad-${color.replace('#', '')}`} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={color} stopOpacity="0.25" />
+              <stop offset="100%" stopColor={color} stopOpacity="0.02" />
+            </linearGradient>
+          </defs>
+          <polygon points={areaPoints} fill={`url(#grad-${color.replace('#', '')})`} />
+          <polyline points={points} fill="none" stroke={color} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
+          {data.map((d, i) => (
+            <g key={i}>
+              <circle cx={xs[i]} cy={ys[i]} r={4} fill={color} stroke="#1e293b" strokeWidth="2" />
+              <title>{d.label}: {d.value.toLocaleString()} {unit}</title>
+            </g>
+          ))}
+        </svg>
+        <div className="flex" style={{ width: totalW }}>
+          {data.map((d, i) => (
+            <div key={i} className="text-center" style={{ width: PW }}>
+              <span className="text-[9px] text-slate-500 whitespace-nowrap">{d.label}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function WorkoutPlanCard({ plan, expanded, onToggle, onActivate, onDeactivate, onDelete, onStart, onShare, onEdit, onRename }: any) {
   const [editing, setEditing] = useState(false)
   const [editName, setEditName] = useState(plan.name)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -739,6 +953,7 @@ function WorkoutPlanCard({ plan, expanded, onToggle, onActivate, onDeactivate, o
           <div className="flex gap-2 pt-2">
             {!plan.is_active && <Button variant="secondary" size="sm" onClick={onActivate} className="flex-1">Set Active</Button>}
             {plan.is_active && <Button variant="ghost" size="sm" onClick={onDeactivate} className="flex-1 text-slate-400">Deactivate</Button>}
+            <Button variant="ghost" size="sm" onClick={onShare} className="text-slate-400 flex-none px-3" title="Copy share link"><Share2 size={14} /></Button>
             <Button variant="ghost" size="sm" onClick={onEdit} className="text-indigo-400 bg-indigo-500/10 flex-none px-3"><Pencil size={14} /></Button>
             <Button variant="ghost" size="sm" onClick={onDelete} className="text-red-400 bg-red-500/10 flex-none px-3"><Trash2 size={16} /></Button>
           </div>
@@ -756,7 +971,23 @@ function SessionCard({ session, expanded, onToggle, onDelete, plans, onAttachPla
   plans: WorkoutPlan[]
   onAttachPlan: (id: number, planId: number) => void
 }) {
+  const logSet = useLogSet()
   const [showPlanPicker, setShowPlanPicker] = useState(false)
+  const [showAddSet, setShowAddSet] = useState(false)
+  const [addSetForm, setAddSetForm] = useState({ exercise_name: '', reps: 10, weight_lbs: 0 })
+
+  const handleAddSet = async () => {
+    if (!addSetForm.exercise_name.trim()) return
+    const existingCount = session.set_logs.filter(l => l.exercise_name === addSetForm.exercise_name.trim()).length
+    await logSet.mutateAsync({
+      sessionId: session.id,
+      data: { exercise_name: addSetForm.exercise_name.trim(), set_number: existingCount + 1, reps: addSetForm.reps, weight_lbs: addSetForm.weight_lbs },
+    })
+    setAddSetForm({ exercise_name: '', reps: 10, weight_lbs: 0 })
+    setShowAddSet(false)
+  }
+
+
   const setCount = session.set_logs.length
   const volume = session.set_logs.reduce((a, l) => a + (l.reps ?? 0) * (l.weight_lbs ?? 0), 0)
   const byExercise = session.set_logs.reduce<Record<string, typeof session.set_logs>>((acc, log) => {
@@ -836,17 +1067,56 @@ function SessionCard({ session, expanded, onToggle, onDelete, plans, onAttachPla
               </button>
             )}
           </div>
+
+          {/* Add set to finished session */}
+          {showAddSet ? (
+            <div className="mt-3 bg-slate-800 border border-slate-600 rounded-xl p-3 space-y-2">
+              <p className="text-xs font-semibold text-slate-300">Add Set</p>
+              <input
+                autoFocus
+                value={addSetForm.exercise_name}
+                onChange={e => setAddSetForm(f => ({ ...f, exercise_name: e.target.value }))}
+                placeholder="Exercise name"
+                className="w-full bg-slate-700 border border-slate-600 text-slate-100 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-indigo-500"
+              />
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <p className="text-xs text-slate-500 mb-1">Reps</p>
+                  <input type="number" min="1" value={addSetForm.reps} onChange={e => setAddSetForm(f => ({ ...f, reps: Number(e.target.value) }))}
+                    className="w-full bg-slate-700 border border-slate-600 text-slate-100 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-indigo-500" />
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500 mb-1">Weight (lbs)</p>
+                  <input type="number" min="0" value={addSetForm.weight_lbs} onChange={e => setAddSetForm(f => ({ ...f, weight_lbs: Number(e.target.value) }))}
+                    className="w-full bg-slate-700 border border-slate-600 text-slate-100 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-indigo-500" />
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <button onClick={() => setShowAddSet(false)} className="flex-1 py-1.5 rounded-lg bg-slate-700 text-slate-300 text-sm">Cancel</button>
+                <button onClick={handleAddSet} disabled={logSet.isPending} className="flex-1 py-1.5 rounded-lg bg-indigo-600 text-white text-sm font-medium disabled:opacity-50">
+                  {logSet.isPending ? 'Adding…' : 'Add Set'}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              onClick={() => setShowAddSet(true)}
+              className="w-full mt-3 flex items-center justify-center gap-2 py-2 rounded-lg border border-dashed border-slate-600 text-slate-400 hover:border-indigo-500 hover:text-indigo-400 transition-colors text-xs font-medium"
+            >
+              <Plus size={13} /> Add Set to This Session
+            </button>
+          )}
         </div>
       )}
     </Card>
   )
 }
 
-function ActiveExerciseCard({ exercise, onLogSet }: { exercise: WorkoutExercise; onLogSet: (set: number, reps: number | null, weight: number, durationSecs?: number) => void }) {
+function ActiveExerciseCard({ exercise, lastWeight, onLogSet }: { exercise: WorkoutExercise; lastWeight?: number; onLogSet: (set: number, reps: number | null, weight: number, durationSecs?: number) => void }) {
   const isTimed = !!exercise.duration_secs
   const [currentSet, setCurrentSet] = useState(1)
   const [reps, setReps] = useState(Number(exercise.reps) || 10)
-  const [weight, setWeight] = useState(exercise.weight_lbs ?? 0)
+  const [weight, setWeight] = useState(exercise.weight_lbs ?? lastWeight ?? 0)
   const [secs, setSecs] = useState(exercise.duration_secs ?? 45)
   const [countdown, setCountdown] = useState<number | null>(null)
   const adjust = (setter: any, val: number, amount: number, step = 1) => setter(Math.max(0, val + amount * step))
@@ -866,7 +1136,12 @@ function ActiveExerciseCard({ exercise, onLogSet }: { exercise: WorkoutExercise;
   return (
     <Card className="bg-slate-800 border-slate-700">
       <div className="flex justify-between items-center mb-4 border-b border-slate-700 pb-2">
-        <h3 className="font-semibold text-lg text-slate-100">{exercise.name}</h3>
+        <div>
+          <h3 className="font-semibold text-lg text-slate-100">{exercise.name}</h3>
+          {!exercise.weight_lbs && lastWeight && lastWeight > 0 && (
+            <p className="text-[10px] text-slate-500">Last: {lastWeight} lbs</p>
+          )}
+        </div>
         <span className="text-slate-400 text-sm">Set {currentSet} of {exercise.sets || '?'}</span>
       </div>
       <div className={`grid gap-4 mb-6 ${isTimed ? 'grid-cols-1' : 'grid-cols-2'}`}>

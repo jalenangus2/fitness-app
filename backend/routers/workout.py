@@ -1,5 +1,6 @@
 """Workout plans router: CRUD + AI generation + activation."""
 import json
+import secrets
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
@@ -30,7 +31,7 @@ def _serialize_plan(plan: WorkoutPlan) -> WorkoutPlanResponse:
         id=plan.id, name=plan.name, muscle_groups=muscle_groups,
         difficulty=plan.difficulty, duration_mins=plan.duration_mins,
         notes=plan.notes, is_active=plan.is_active, is_ai_generated=plan.is_ai_generated,
-        exercises=exercises, created_at=plan.created_at,
+        share_token=plan.share_token, exercises=exercises, created_at=plan.created_at,
     )
 
 # --- PLAN CRUD ---
@@ -100,6 +101,22 @@ def deactivate_workout_plan(plan_id: int, current_user: User = Depends(get_curre
     plan.is_active = False
     db.commit()
     db.refresh(plan)
+    return _serialize_plan(plan)
+
+@router.post("/{plan_id}/share", response_model=WorkoutPlanResponse)
+def share_workout_plan(plan_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    plan = db.query(WorkoutPlan).filter(WorkoutPlan.id == plan_id, WorkoutPlan.user_id == current_user.id).first()
+    if not plan: raise HTTPException(status_code=404, detail="Plan not found")
+    if not plan.share_token:
+        plan.share_token = secrets.token_urlsafe(12)
+        db.commit()
+        db.refresh(plan)
+    return _serialize_plan(plan)
+
+@router.get("/shared/{token}", response_model=WorkoutPlanResponse)
+def get_shared_workout_plan(token: str, db: Session = Depends(get_db)):
+    plan = db.query(WorkoutPlan).filter(WorkoutPlan.share_token == token).first()
+    if not plan: raise HTTPException(status_code=404, detail="Shared plan not found")
     return _serialize_plan(plan)
 
 @router.put("/{plan_id}/exercises", response_model=WorkoutPlanResponse)

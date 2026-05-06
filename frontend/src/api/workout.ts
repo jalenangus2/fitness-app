@@ -39,3 +39,13 @@ export const generateWorkout = async (data: GenerateWorkoutRequest): Promise<Wor
   const res = await client.post('/workouts/generate', data)
   return res.data
 }
+
+export const shareWorkoutPlan = async (id: number): Promise<WorkoutPlan> => {
+  const res = await client.post(`/workouts/${id}/share`)
+  return res.data
+}
+
+export const getSharedWorkoutPlan = async (token: string): Promise<WorkoutPlan> => {
+  const res = await client.get(`/workouts/shared/${token}`)
+  return res.data
+}

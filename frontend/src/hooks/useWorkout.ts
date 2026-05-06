@@ -111,3 +111,19 @@ export function useDeleteSession() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['workout-sessions'] }),
   })
 }
+
+export function useShareWorkoutPlan() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: number) => api.shareWorkoutPlan(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['workouts'] }),
+  })
+}
+
+export function useSharedWorkoutPlan(token: string) {
+  return useQuery({
+    queryKey: ['shared-workout-plan', token],
+    queryFn: () => api.getSharedWorkoutPlan(token),
+    enabled: !!token,
+  })
+}

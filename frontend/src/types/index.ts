@@ -28,6 +28,7 @@ export interface WorkoutPlan {
   notes: string | null
   is_active: boolean
   is_ai_generated: boolean
+  share_token: string | null
   exercises: WorkoutExercise[]
   created_at: string
 }
@@ -70,6 +71,8 @@ export interface MealPlan {
   target_fat_g: number | null
   duration_days: number
   is_active: boolean
+  is_ai_generated: boolean
+  share_token: string | null
   meals: Meal[]
   created_at: string
 }
@@ -442,6 +445,23 @@ export interface FinancialGoalCreate {
   target_amount: number
   current_amount?: number
   target_date?: string | null
+}
+
+// ─── Bills ────────────────────────────────────────────────────────────────────
+export interface Bill {
+  id: number
+  user_id: number
+  name: string
+  amount_cents: number
+  due_day: number
+  created_at: string
+}
+
+export interface PaycheckConfig {
+  id: number
+  reference_date: string
+  frequency_days: number
+  amount_cents: number
 }
 
 // ─── Dashboard ────────────────────────────────────────────────────────────────

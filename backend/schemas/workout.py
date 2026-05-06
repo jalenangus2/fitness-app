@@ -40,6 +40,7 @@ class WorkoutPlanResponse(WorkoutPlanBase):
     model_config = ConfigDict(from_attributes=True)
     id: int
     is_active: bool
+    share_token: Optional[str] = None
     exercises: list[WorkoutExerciseResponse] = []
     created_at: datetime
 
