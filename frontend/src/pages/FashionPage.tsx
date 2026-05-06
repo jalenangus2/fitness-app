@@ -282,9 +282,23 @@ function ReleaseCard({ release, onDelete, onToggleAlert }: {
   const hasAlert = release.alerts.length > 0
   const days = daysUntil(release.release_date)
 
+  const retailerHref = release.retailer_url
+    ? /^https?:\/\//i.test(release.retailer_url) ? release.retailer_url : `https://${release.retailer_url}`
+    : null
+
   return (
     <Card className="flex flex-col">
-      {release.image_url ? (
+      {retailerHref ? (
+        <a href={retailerHref} target="_blank" rel="noreferrer" className="block mb-3">
+          {release.image_url ? (
+            <img src={release.image_url} alt={release.name} className="w-full h-40 object-contain bg-white rounded-lg hover:opacity-90 transition-opacity" />
+          ) : (
+            <div className="w-full h-40 bg-slate-700 rounded-lg flex items-center justify-center hover:bg-slate-600 transition-colors">
+              <Shirt size={32} className="text-slate-500" />
+            </div>
+          )}
+        </a>
+      ) : release.image_url ? (
         <img src={release.image_url} alt={release.name} className="w-full h-40 object-contain bg-white rounded-lg mb-3" />
       ) : (
         <div className="w-full h-40 bg-slate-700 rounded-lg mb-3 flex items-center justify-center">
@@ -311,8 +325,8 @@ function ReleaseCard({ release, onDelete, onToggleAlert }: {
         <Badge variant={release.category === 'sneakers' ? 'indigo' : release.category === 'clothing' ? 'blue' : 'slate'}>
           {release.category}
         </Badge>
-        {release.retailer_url && (
-          <a href={release.retailer_url} target="_blank" rel="noreferrer" className="text-slate-400 hover:text-indigo-400">
+        {retailerHref && (
+          <a href={retailerHref} target="_blank" rel="noreferrer" className="text-slate-400 hover:text-indigo-400">
             <ExternalLink size={15} />
           </a>
         )}
