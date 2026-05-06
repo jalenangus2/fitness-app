@@ -5,8 +5,9 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .database import engine, Base
-from .routers import auth, workout, meal, shopping, schedule, fashion, dashboard, finance, tracking, notifications
+from .routers import auth, workout, meal, shopping, schedule, fashion, dashboard, finance, tracking, notifications, bills
 from .models import notification as _notification_model  # register table with SQLAlchemy
+from .models import bills as _bills_model  # register bill/paycheck tables
 
 import os
 
@@ -98,6 +99,7 @@ app.include_router(dashboard.router,prefix="/api/v1/dashboard", tags=["dashboard
 app.include_router(finance.router,   prefix="/api/v1/finance",   tags=["finance"])
 app.include_router(tracking.router,      prefix="/api/v1/tracking",      tags=["tracking"])
 app.include_router(notifications.router, prefix="/api/v1/notifications", tags=["notifications"])
+app.include_router(bills.router,         prefix="/api/v1/bills",         tags=["bills"])
 
 
 @app.get("/api/v1/health")

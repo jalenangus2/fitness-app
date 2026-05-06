@@ -1,8 +1,8 @@
-import { useState } from 'react'
-import { format, parseISO } from 'date-fns'
+import { useState, useMemo } from 'react'
+import { format, parseISO, addDays } from 'date-fns'
 import {
   DollarSign, Plus, Trash2, RefreshCw, Building2, CreditCard,
-  TrendingDown, Search, ChevronDown,
+  TrendingDown, Search, ChevronDown, Receipt, Calendar,
 } from 'lucide-react'
 import { usePlaidLink } from 'react-plaid-link'
 import {
@@ -11,6 +11,7 @@ import {
   useBudgets, useCreateBudget, useDeleteBudget, useFinanceSummary,
   useGoals, useCreateGoal, useDeleteGoal,
 } from '../hooks/useFinance'
+import { useBills, useCreateBill, useDeleteBill, usePaycheckConfig, useSavePaycheckConfig } from '../hooks/useBills'
 import { useToast } from '../components/ui/Toast'
 import Card from '../components/ui/Card'
 import Button from '../components/ui/Button'
@@ -20,7 +21,7 @@ import Input from '../components/ui/Input'
 import Spinner from '../components/ui/Spinner'
 import type { BudgetWithSpend, Transaction, FinancialGoal } from '../types'
 
-const TABS = ['Overview', 'Transactions', 'Budgets', 'Goals'] as const
+const TABS = ['Overview', 'Transactions', 'Budgets', 'Goals', 'Bills'] as const
 type Tab = typeof TABS[number]
 
 const BUDGET_COLORS = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#3b82f6', '#8b5cf6', '#ec4899', '#14b8a6']
@@ -452,8 +453,244 @@ export default function FinancePage() {
       {tab === 'Transactions' && <TransactionsTab />}
       {tab === 'Budgets' && <BudgetsTab />}
       {tab === 'Goals' && <GoalsTab />}
+      {tab === 'Bills' && <BillsTab />}
     </div>
   )
+}
+
+// ─── Bills Tab ────────────────────────────────────────────────────────────────
+
+function BillsTab() {
+  const { toast } = useToast()
+  const { data: bills = [], isLoading } = useBills()
+  const { data: paycheck } = usePaycheckConfig()
+  const createBill = useCreateBill()
+  const deleteBill = useDeleteBill()
+  const savePaycheck = useSavePaycheckConfig()
+
+  const [showBillModal, setShowBillModal] = useState(false)
+  const [showPaycheckModal, setShowPaycheckModal] = useState(false)
+  const [billForm, setBillForm] = useState({ name: '', amount: '', due_day: '1' })
+  const [paycheckForm, setPaycheckForm] = useState({
+    reference_date: new Date().toISOString().split('T')[0],
+    frequency_days: '14',
+    amount: '',
+  })
+
+  const nextPaychecks = useMemo(() => {
+    if (!paycheck) return []
+    const ref = new Date(paycheck.reference_date + 'T12:00:00')
+    const freq = paycheck.frequency_days
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    let d = new Date(ref)
+    while (d < today) d = addDays(d, freq)
+    return [d, addDays(d, freq), addDays(d, freq * 2)]
+  }, [paycheck])
+
+  const nextPaycheck = nextPaychecks[0] ?? null
+
+  const getBillStatus = (dueDay: number) => {
+    if (!nextPaycheck) return null
+    const today = new Date()
+    const month = today.getMonth()
+    const year = today.getFullYear()
+    const dueDate = new Date(year, month, dueDay)
+    if (dueDate < today) {
+      const nextMonth = new Date(year, month + 1, dueDay)
+      return nextMonth <= nextPaycheck ? 'before' : 'after'
+    }
+    return dueDate <= nextPaycheck ? 'before' : 'after'
+  }
+
+  const handleCreateBill = async () => {
+    if (!billForm.name.trim() || !billForm.due_day) return toast('Name and due day required', 'error')
+    const day = Number(billForm.due_day)
+    if (day < 1 || day > 31) return toast('Due day must be 1–31', 'error')
+    await createBill.mutateAsync({
+      name: billForm.name.trim(),
+      amount_cents: Math.round((parseFloat(billForm.amount) || 0) * 100),
+      due_day: day,
+    })
+    toast('Bill added!', 'success')
+    setShowBillModal(false)
+    setBillForm({ name: '', amount: '', due_day: '1' })
+  }
+
+  const handleSavePaycheck = async () => {
+    const freq = Number(paycheckForm.frequency_days)
+    if (!paycheckForm.reference_date || freq < 1) return toast('Enter a valid date and frequency', 'error')
+    await savePaycheck.mutateAsync({
+      reference_date: paycheckForm.reference_date,
+      frequency_days: freq,
+      amount_cents: Math.round((parseFloat(paycheckForm.amount) || 0) * 100),
+    })
+    toast('Paycheck schedule saved!', 'success')
+    setShowPaycheckModal(false)
+  }
+
+  if (isLoading) return <div className="flex justify-center py-10"><Spinner size="lg" /></div>
+
+  const billsBefore = bills.filter(b => getBillStatus(b.due_day) === 'before')
+  const billsAfter = bills.filter(b => getBillStatus(b.due_day) === 'after')
+  const totalMonthly = bills.reduce((s, b) => s + b.amount_cents, 0)
+
+  return (
+    <div className="space-y-6">
+      {/* Paycheck schedule */}
+      <Card className="bg-slate-800 border-slate-700">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <Calendar size={16} className="text-indigo-400" />
+            <h3 className="text-sm font-semibold text-slate-200">Paycheck Schedule</h3>
+          </div>
+          <Button
+            size="sm" variant="secondary"
+            onClick={() => {
+              setPaycheckForm({
+                reference_date: paycheck?.reference_date ?? new Date().toISOString().split('T')[0],
+                frequency_days: String(paycheck?.frequency_days ?? 14),
+                amount: paycheck ? String(paycheck.amount_cents / 100) : '',
+              })
+              setShowPaycheckModal(true)
+            }}
+          >
+            {paycheck ? 'Edit' : 'Set Up'}
+          </Button>
+        </div>
+        {paycheck ? (
+          <div className="space-y-3">
+            <div className="flex items-center gap-4 text-sm">
+              <span className="text-slate-400">Every {paycheck.frequency_days} days</span>
+              {paycheck.amount_cents > 0 && <span className="text-emerald-400 font-medium">{fmt$(paycheck.amount_cents / 100)}</span>}
+            </div>
+            <div className="space-y-2">
+              {nextPaychecks.map((d, i) => (
+                <div key={i} className={`flex items-center justify-between px-3 py-2 rounded-lg ${i === 0 ? 'bg-indigo-500/10 border border-indigo-500/20' : 'bg-slate-700/50'}`}>
+                  <span className={`text-sm font-medium ${i === 0 ? 'text-indigo-300' : 'text-slate-400'}`}>
+                    {i === 0 ? 'Next paycheck' : `+${i} paycheck${i > 1 ? 's' : ''}`}
+                  </span>
+                  <span className={`text-sm font-semibold ${i === 0 ? 'text-indigo-200' : 'text-slate-300'}`}>
+                    {format(d, 'EEE, MMM d')}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <p className="text-sm text-slate-500 text-center py-4">Set up your paycheck schedule to see bill timing.</p>
+        )}
+      </Card>
+
+      {/* Bills list */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="text-sm font-semibold text-slate-200">Monthly Bills</h3>
+          {totalMonthly > 0 && <p className="text-xs text-slate-500 mt-0.5">Total: {fmt$(totalMonthly / 100)}/mo</p>}
+        </div>
+        <Button size="sm" onClick={() => setShowBillModal(true)}><Plus size={14} /> Add Bill</Button>
+      </div>
+
+      {bills.length === 0 && (
+        <Card className="text-center py-10">
+          <Receipt size={32} className="mx-auto text-slate-600 mb-3" />
+          <p className="text-slate-400">No bills yet.</p>
+          <Button className="mt-4" onClick={() => setShowBillModal(true)}><Plus size={16} /> Add First Bill</Button>
+        </Card>
+      )}
+
+      {paycheck && bills.length > 0 && (
+        <>
+          {billsBefore.length > 0 && (
+            <div>
+              <p className="text-xs font-semibold text-amber-400 uppercase tracking-wider mb-2">Due before next paycheck</p>
+              <div className="space-y-2">
+                {billsBefore.map(b => <BillRow key={b.id} bill={b} onDelete={() => deleteBill.mutateAsync(b.id)} />)}
+              </div>
+            </div>
+          )}
+          {billsAfter.length > 0 && (
+            <div>
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Due after next paycheck</p>
+              <div className="space-y-2">
+                {billsAfter.map(b => <BillRow key={b.id} bill={b} onDelete={() => deleteBill.mutateAsync(b.id)} />)}
+              </div>
+            </div>
+          )}
+        </>
+      )}
+
+      {!paycheck && bills.length > 0 && (
+        <div className="space-y-2">
+          {bills.map(b => <BillRow key={b.id} bill={b} onDelete={() => deleteBill.mutateAsync(b.id)} />)}
+        </div>
+      )}
+
+      {/* Add Bill Modal */}
+      <Modal isOpen={showBillModal} onClose={() => setShowBillModal(false)} title="Add Bill">
+        <div className="space-y-4">
+          <Input label="Bill Name" value={billForm.name} onChange={e => setBillForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Netflix, Rent, Car Insurance" autoFocus />
+          <div className="grid grid-cols-2 gap-3">
+            <Input label="Amount ($)" type="number" min="0" step="0.01" value={billForm.amount} onChange={e => setBillForm(f => ({ ...f, amount: e.target.value }))} placeholder="0.00" />
+            <Input label="Due Day (1–31)" type="number" min="1" max="31" value={billForm.due_day} onChange={e => setBillForm(f => ({ ...f, due_day: e.target.value }))} placeholder="15" />
+          </div>
+        </div>
+        <div className="flex gap-3 pt-4 mt-4 border-t border-slate-700">
+          <Button variant="secondary" onClick={() => setShowBillModal(false)} className="flex-1">Cancel</Button>
+          <Button onClick={handleCreateBill} disabled={createBill.isPending} className="flex-1">Add Bill</Button>
+        </div>
+      </Modal>
+
+      {/* Paycheck Modal */}
+      <Modal isOpen={showPaycheckModal} onClose={() => setShowPaycheckModal(false)} title="Paycheck Schedule">
+        <div className="space-y-4">
+          <Input label="Most Recent Paycheck Date" type="date" value={paycheckForm.reference_date} onChange={e => setPaycheckForm(f => ({ ...f, reference_date: e.target.value }))} />
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <p className="text-sm font-medium text-slate-300 mb-1.5">Frequency</p>
+              <select
+                value={paycheckForm.frequency_days}
+                onChange={e => setPaycheckForm(f => ({ ...f, frequency_days: e.target.value }))}
+                className="w-full bg-slate-700 border border-slate-600 text-slate-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              >
+                <option value="7">Weekly (every 7 days)</option>
+                <option value="14">Bi-weekly (every 14 days)</option>
+                <option value="15">Semi-monthly (every 15 days)</option>
+                <option value="30">Monthly (every 30 days)</option>
+              </select>
+            </div>
+            <Input label="Paycheck Amount ($)" type="number" min="0" step="0.01" value={paycheckForm.amount} onChange={e => setPaycheckForm(f => ({ ...f, amount: e.target.value }))} placeholder="0.00" />
+          </div>
+        </div>
+        <div className="flex gap-3 pt-4 mt-4 border-t border-slate-700">
+          <Button variant="secondary" onClick={() => setShowPaycheckModal(false)} className="flex-1">Cancel</Button>
+          <Button onClick={handleSavePaycheck} disabled={savePaycheck.isPending} className="flex-1">Save Schedule</Button>
+        </div>
+      </Modal>
+    </div>
+  )
+}
+
+function BillRow({ bill, onDelete }: { bill: { id: number; name: string; amount_cents: number; due_day: number }; onDelete: () => void }) {
+  return (
+    <Card className="bg-slate-800 border-slate-700">
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-sm font-medium text-slate-200">{bill.name}</p>
+          <p className="text-xs text-slate-500 mt-0.5">Due on the {bill.due_day}{ordinal(bill.due_day)}</p>
+        </div>
+        <div className="flex items-center gap-3">
+          {bill.amount_cents > 0 && <span className="text-sm font-semibold text-slate-300">{fmt$(bill.amount_cents / 100)}</span>}
+          <button onClick={onDelete} className="text-slate-500 hover:text-red-400 p-1"><Trash2 size={14} /></button>
+        </div>
+      </div>
+    </Card>
+  )
+}
+
+function ordinal(n: number) {
+  if (n >= 11 && n <= 13) return 'th'
+  switch (n % 10) { case 1: return 'st'; case 2: return 'nd'; case 3: return 'rd'; default: return 'th' }
 }
 
 // ─── Goals Tab ────────────────────────────────────────────────────────────────
