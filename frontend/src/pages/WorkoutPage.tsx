@@ -55,6 +55,10 @@ export default function WorkoutPage() {
   const [showPushModal, setShowPushModal] = useState(false)
   const [pushCount, setPushCount] = useState(20)
 
+  const [extraExercises, setExtraExercises] = useState<Partial<WorkoutExercise>[]>([])
+  const [showAddExInWorkout, setShowAddExInWorkout] = useState(false)
+  const [addExForm, setAddExForm] = useState({ name: '', sets: 3, reps: '10', weight_lbs: 0 })
+
   const [form, setForm] = useState({ name: '', muscle_groups: [] as string[], difficulty: 'intermediate', duration_mins: 45, notes: '' })
   const [manualExercises, setManualExercises] = useState<Partial<WorkoutExercise>[]>([])
 
@@ -129,6 +133,8 @@ export default function WorkoutPage() {
       plan_id: plan.id,
     })
     setActiveSession({ id: session.id, plan, startedAt: Date.now() })
+    setExtraExercises([])
+    setShowAddExInWorkout(false)
     toast("Workout started! Let's go!", 'success')
   }
 
@@ -238,6 +244,20 @@ export default function WorkoutPage() {
     return Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 5)
   }, [sessions])
 
+  // Last logged weight per exercise (most recent session first)
+  const lastWeightMap = useMemo(() => {
+    const map: Record<string, number> = {}
+    const sorted = [...sessions].sort((a, b) => b.session_date.localeCompare(a.session_date))
+    sorted.forEach(s => {
+      s.set_logs.forEach(l => {
+        if (l.weight_lbs && l.weight_lbs > 0 && !map[l.exercise_name]) {
+          map[l.exercise_name] = l.weight_lbs
+        }
+      })
+    })
+    return map
+  }, [sessions])
+
   // Active workout full-screen view
   if (activeSession) {
     return (
@@ -255,13 +275,71 @@ export default function WorkoutPage() {
             <Button variant="ghost" size="sm" onClick={() => setRestTimer(0)}><Timer size={16} className="text-slate-500" /></Button>
           )}
         </div>
-        <div className="flex-1 overflow-y-auto p-4 space-y-6 pb-24">
+        <div className="flex-1 overflow-y-auto p-4 space-y-6 pb-32">
           {activeSession.plan.exercises.map((ex, i) => (
             <ActiveExerciseCard
               key={i} exercise={ex}
+              lastWeight={lastWeightMap[ex.name]}
               onLogSet={(setNum, reps, weight, durationSecs) => handleLogSet(ex.name, setNum, reps, weight, ex.rest_seconds || 60, durationSecs)}
             />
           ))}
+          {extraExercises.map((ex, i) => (
+            <ActiveExerciseCard
+              key={`extra-${i}`} exercise={ex as WorkoutExercise}
+              lastWeight={lastWeightMap[ex.name || '']}
+              onLogSet={(setNum, reps, weight, durationSecs) => handleLogSet(ex.name || '', setNum, reps, weight, 60, durationSecs)}
+            />
+          ))}
+
+          {/* Add Exercise inline form */}
+          {showAddExInWorkout ? (
+            <div className="bg-slate-800 border border-slate-600 rounded-xl p-4 space-y-3">
+              <p className="text-sm font-semibold text-slate-200">Add Exercise</p>
+              <input
+                autoFocus
+                value={addExForm.name}
+                onChange={e => setAddExForm(f => ({ ...f, name: e.target.value }))}
+                placeholder="Exercise name (e.g. Cable Row)"
+                className="w-full bg-slate-700 border border-slate-600 text-slate-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-500"
+              />
+              <div className="grid grid-cols-3 gap-2">
+                <div>
+                  <p className="text-xs text-slate-500 mb-1">Sets</p>
+                  <input type="number" min="1" value={addExForm.sets} onChange={e => setAddExForm(f => ({ ...f, sets: Number(e.target.value) }))}
+                    className="w-full bg-slate-700 border border-slate-600 text-slate-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-500" />
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500 mb-1">Reps</p>
+                  <input type="text" value={addExForm.reps} onChange={e => setAddExForm(f => ({ ...f, reps: e.target.value }))}
+                    className="w-full bg-slate-700 border border-slate-600 text-slate-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-500" />
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500 mb-1">Wt (lbs)</p>
+                  <input type="number" min="0" value={addExForm.weight_lbs} onChange={e => setAddExForm(f => ({ ...f, weight_lbs: Number(e.target.value) }))}
+                    className="w-full bg-slate-700 border border-slate-600 text-slate-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-500" />
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <button onClick={() => setShowAddExInWorkout(false)} className="flex-1 py-2 rounded-lg bg-slate-700 text-slate-300 text-sm">Cancel</button>
+                <button
+                  onClick={() => {
+                    if (!addExForm.name.trim()) return
+                    setExtraExercises(prev => [...prev, { name: addExForm.name.trim(), sets: addExForm.sets, reps: addExForm.reps, weight_lbs: addExForm.weight_lbs }])
+                    setAddExForm({ name: '', sets: 3, reps: '10', weight_lbs: 0 })
+                    setShowAddExInWorkout(false)
+                  }}
+                  className="flex-1 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium"
+                >Add</button>
+              </div>
+            </div>
+          ) : (
+            <button
+              onClick={() => setShowAddExInWorkout(true)}
+              className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border border-dashed border-slate-600 text-slate-400 hover:border-indigo-500 hover:text-indigo-400 transition-colors text-sm font-medium"
+            >
+              <Plus size={15} /> Add Exercise
+            </button>
+          )}
         </div>
         <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-slate-900 via-slate-900 to-transparent">
           <Button onClick={handleFinishWorkout} className="w-full py-4 text-lg shadow-xl shadow-indigo-500/20">
@@ -800,11 +878,11 @@ function SessionCard({ session, expanded, onToggle, onDelete }: { session: Worko
   )
 }
 
-function ActiveExerciseCard({ exercise, onLogSet }: { exercise: WorkoutExercise; onLogSet: (set: number, reps: number | null, weight: number, durationSecs?: number) => void }) {
+function ActiveExerciseCard({ exercise, lastWeight, onLogSet }: { exercise: WorkoutExercise; lastWeight?: number; onLogSet: (set: number, reps: number | null, weight: number, durationSecs?: number) => void }) {
   const isTimed = !!exercise.duration_secs
   const [currentSet, setCurrentSet] = useState(1)
   const [reps, setReps] = useState(Number(exercise.reps) || 10)
-  const [weight, setWeight] = useState(exercise.weight_lbs ?? 0)
+  const [weight, setWeight] = useState(exercise.weight_lbs ?? lastWeight ?? 0)
   const [secs, setSecs] = useState(exercise.duration_secs ?? 45)
   const [countdown, setCountdown] = useState<number | null>(null)
   const adjust = (setter: any, val: number, amount: number, step = 1) => setter(Math.max(0, val + amount * step))
@@ -824,7 +902,12 @@ function ActiveExerciseCard({ exercise, onLogSet }: { exercise: WorkoutExercise;
   return (
     <Card className="bg-slate-800 border-slate-700">
       <div className="flex justify-between items-center mb-4 border-b border-slate-700 pb-2">
-        <h3 className="font-semibold text-lg text-slate-100">{exercise.name}</h3>
+        <div>
+          <h3 className="font-semibold text-lg text-slate-100">{exercise.name}</h3>
+          {!exercise.weight_lbs && lastWeight && lastWeight > 0 && (
+            <p className="text-[10px] text-slate-500">Last: {lastWeight} lbs</p>
+          )}
+        </div>
         <span className="text-slate-400 text-sm">Set {currentSet} of {exercise.sets || '?'}</span>
       </div>
       <div className={`grid gap-4 mb-6 ${isTimed ? 'grid-cols-1' : 'grid-cols-2'}`}>
