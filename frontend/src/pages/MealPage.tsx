@@ -1,8 +1,7 @@
 import { useState, useMemo } from 'react'
-import { format, parseISO, startOfWeek } from 'date-fns'
+import { format, parseISO } from 'date-fns'
 import { Plus, Zap, CheckCircle, Trash2, ChevronDown, ShoppingCart, Search, Pencil, BarChart2, Dumbbell } from 'lucide-react'
 import { useMealPlans, useCreateMealPlan, useUpdateMealPlan, useActivateMealPlan, useDeleteMealPlan, useDailyNutrition, useLogNutrition, useSearchFoods, useNutritionHistory, useCurrentUser, useUpdateNutritionGoals } from '../hooks/useMeal'
-import { useWorkoutSessions } from '../hooks/useWorkout'
 import { useCreateShoppingList } from '../hooks/useShopping'
 import { useToast } from '../components/ui/Toast'
 import Card from '../components/ui/Card'
@@ -21,7 +20,6 @@ export default function MealPage() {
   const { data: logs = [] } = useDailyNutrition()
   const { data: currentUser } = useCurrentUser()
   const { data: historyLogs = [] } = useNutritionHistory(30)
-  const { data: sessions = [] } = useWorkoutSessions(200)
   const createManual = useCreateMealPlan()
   const updatePlan = useUpdateMealPlan()
   const updateGoals = useUpdateNutritionGoals()
@@ -82,24 +80,6 @@ export default function MealPage() {
     })
     return Object.entries(groups).sort(([a], [b]) => b.localeCompare(a))
   }, [historyLogs])
-
-  // Graph data computations
-  const calChartData = useMemo(() => {
-    return historyByDate.slice(0, 14).reverse().map(([dateKey, dayLogs]) => ({
-      date: dateKey,
-      cals: Math.round(dayLogs.reduce((s, l) => s + (l.calories ?? 0), 0)),
-    }))
-  }, [historyByDate])
-
-  const workoutWeekData = useMemo(() => {
-    const weekCounts: Record<string, number> = {}
-    sessions.forEach((s: any) => {
-      if (!s.session_date) return
-      const weekStart = format(startOfWeek(parseISO(s.session_date), { weekStartsOn: 1 }), 'yyyy-MM-dd')
-      weekCounts[weekStart] = (weekCounts[weekStart] || 0) + 1
-    })
-    return Object.entries(weekCounts).sort(([a], [b]) => a.localeCompare(b)).slice(-8).map(([week, count]) => ({ week, count }))
-  }, [sessions])
 
   const macroAverages = useMemo(() => {
     if (!historyByDate.length) return null
@@ -293,22 +273,6 @@ export default function MealPage() {
       {activeTab === 'graphs' && (
         <div className="space-y-6">
 
-          {/* CALORIE HISTORY */}
-          <Card className="bg-slate-800 border-slate-700">
-            <h2 className="text-base font-bold text-slate-100 mb-1">Calorie History</h2>
-            <p className="text-xs text-slate-500 mb-4">Last {calChartData.length} days</p>
-            {calChartData.length === 0 ? (
-              <p className="text-sm text-slate-500 text-center py-8">No nutrition logs yet. Start logging food to see your history.</p>
-            ) : (
-              <BarChart
-                data={calChartData.map(d => ({ label: format(new Date(d.date + 'T12:00:00'), 'M/d'), value: d.cals }))}
-                color="#10b981"
-                target={dailyTargets.cals}
-                unit="kcal"
-              />
-            )}
-          </Card>
-
           {/* MACRO AVERAGES */}
           {macroAverages && (
             <Card className="bg-slate-800 border-slate-700">
@@ -338,20 +302,6 @@ export default function MealPage() {
             </Card>
           )}
 
-          {/* WORKOUT FREQUENCY */}
-          <Card className="bg-slate-800 border-slate-700">
-            <h2 className="text-base font-bold text-slate-100 mb-1">Workout Frequency</h2>
-            <p className="text-xs text-slate-500 mb-4">Workouts per week (last 8 weeks)</p>
-            {workoutWeekData.length === 0 ? (
-              <p className="text-sm text-slate-500 text-center py-8">No workout sessions recorded yet.</p>
-            ) : (
-              <BarChart
-                data={workoutWeekData.map(d => ({ label: format(new Date(d.week + 'T12:00:00'), 'M/d'), value: d.count }))}
-                color="#6366f1"
-                unit="sessions"
-              />
-            )}
-          </Card>
         </div>
       )}
 
@@ -494,44 +444,6 @@ function MacroAvgBar({ label, value, target, color }: { label: string; value: nu
       </div>
       <div className="h-2 bg-slate-700 rounded-full overflow-hidden">
         <div className="h-full rounded-full transition-all" style={{ width: `${pct * 100}%`, backgroundColor: color }} />
-      </div>
-    </div>
-  )
-}
-
-function BarChart({ data, color, target, unit }: { data: { label: string; value: number }[]; color: string; target?: number; unit: string }) {
-  const max = Math.max(...data.map(d => d.value), target || 0, 1)
-  const BAR_H = 120
-
-  return (
-    <div className="overflow-x-auto">
-      <div className="flex items-end gap-1.5 min-w-max px-1" style={{ height: BAR_H + 40 }}>
-        {data.map((d, i) => {
-          const barH = Math.round((d.value / max) * BAR_H)
-          const targetH = target ? Math.round((target / max) * BAR_H) : null
-          return (
-            <div key={i} className="flex flex-col items-center gap-1" style={{ width: 32 }}>
-              <div className="relative flex items-end" style={{ height: BAR_H }}>
-                {targetH !== null && (
-                  <div
-                    className="absolute left-0 right-0 border-t border-dashed border-slate-500 opacity-50"
-                    style={{ bottom: targetH }}
-                  />
-                )}
-                <div
-                  className="w-full rounded-t transition-all"
-                  style={{ height: barH || 2, backgroundColor: color, opacity: barH < 4 ? 0.3 : 1 }}
-                  title={`${d.value} ${unit}`}
-                />
-              </div>
-              <span className="text-[9px] text-slate-500 whitespace-nowrap">{d.label}</span>
-            </div>
-          )
-        })}
-      </div>
-      <div className="flex items-center gap-3 mt-2 text-[10px] text-slate-500">
-        <span className="flex items-center gap-1"><span className="inline-block w-3 h-2 rounded-sm" style={{ backgroundColor: color }} /> Value</span>
-        {target && <span className="flex items-center gap-1"><span className="inline-block w-4 border-t border-dashed border-slate-400" /> Target ({target} {unit})</span>}
       </div>
     </div>
   )
