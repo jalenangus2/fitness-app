@@ -25,7 +25,7 @@ from ..schemas.tracking import (
     WaterLogCreate, WaterLogResponse,
     WeightForecastRequest, WeightForecastResponse,
     WorkoutSessionCreate, WorkoutSessionResponse, WorkoutSessionUpdate,
-    WorkoutSetLogCreate, WorkoutSetLogResponse,
+    WorkoutSetLogCreate, WorkoutSetLogResponse, WorkoutSetLogUpdate,
 )
 from ..services import analytics_service
 
@@ -165,6 +165,10 @@ def patch_session(
         session.plan_id = data.plan_id if data.plan_id > 0 else None
     if data.name is not None:
         session.name = data.name.strip()
+    if data.session_date is not None:
+        session.session_date = data.session_date
+    if data.duration_mins is not None:
+        session.duration_mins = data.duration_mins
     db.commit()
     db.refresh(session)
     return _serialize_session(session)
@@ -192,6 +196,33 @@ def add_set(
     _session_or_404(session_id, current_user.id, db)
     sl = WorkoutSetLog(session_id=session_id, **data.model_dump())
     db.add(sl)
+    db.commit()
+    db.refresh(sl)
+    return WorkoutSetLogResponse(
+        id=sl.id, session_id=sl.session_id, exercise_name=sl.exercise_name,
+        set_number=sl.set_number, reps=sl.reps, weight_lbs=sl.weight_lbs,
+        duration_secs=sl.duration_secs, rest_secs=sl.rest_secs,
+        rpe=sl.rpe, notes=sl.notes, created_at=sl.created_at,
+    )
+
+
+@router.patch("/sessions/{session_id}/sets/{set_id}", response_model=WorkoutSetLogResponse)
+def update_set(
+    session_id: int,
+    set_id: int,
+    data: WorkoutSetLogUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _session_or_404(session_id, current_user.id, db)
+    sl = db.query(WorkoutSetLog).filter(
+        WorkoutSetLog.id == set_id,
+        WorkoutSetLog.session_id == session_id,
+    ).first()
+    if not sl:
+        raise HTTPException(status_code=404, detail="Set log not found")
+    for field, val in data.model_dump(exclude_none=True).items():
+        setattr(sl, field, val)
     db.commit()
     db.refresh(sl)
     return WorkoutSetLogResponse(

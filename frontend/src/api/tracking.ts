@@ -32,6 +32,9 @@ export const deleteSession = (id: number) =>
 export const addSet = (sessionId: number, data: WorkoutSetLogCreate) =>
   client.post<WorkoutSetLog>(`/tracking/sessions/${sessionId}/sets`, data).then(r => r.data)
 
+export const updateSet = (sessionId: number, setId: number, data: { exercise_name?: string; set_number?: number; reps?: number | null; weight_lbs?: number | null; duration_secs?: number | null }) =>
+  client.patch<WorkoutSetLog>(`/tracking/sessions/${sessionId}/sets/${setId}`, data).then(r => r.data)
+
 export const deleteSet = (sessionId: number, setId: number) =>
   client.delete(`/tracking/sessions/${sessionId}/sets/${setId}`)
 

@@ -4,7 +4,7 @@ import { Plus, Zap, CheckCircle, Trash2, ChevronDown, Play, Timer, X, Minus, Bar
 import {
   useWorkouts, useCreateWorkout, useActivateWorkout, useDeactivateWorkout, useUpdateWorkout,
   useReplaceExercises, useDeleteWorkout, useStartSession, useLogSet, useFinishSession,
-  useWorkoutSessions, useDeleteSession, useUpdateSession, useShareWorkoutPlan,
+  useWorkoutSessions, useDeleteSession, useUpdateSession, useUpdateSet, useDeleteSet, useShareWorkoutPlan,
 } from '../hooks/useWorkout'
 import { useToast } from '../components/ui/Toast'
 import Card from '../components/ui/Card'
@@ -1015,9 +1015,44 @@ function SessionCard({ session, expanded, onToggle, onDelete, plans, onAttachPla
   onAttachPlan: (id: number, planId: number) => void
 }) {
   const logSet = useLogSet()
+  const updateSession = useUpdateSession()
+  const updateSet = useUpdateSet()
+  const deleteSet = useDeleteSet()
+
+  const [editMode, setEditMode] = useState(false)
+  const [editName, setEditName] = useState(session.name)
+  const [editDate, setEditDate] = useState(String(session.session_date))
+  const [editSets, setEditSets] = useState<Record<number, { exercise_name: string; reps: number | null; weight_lbs: number | null }>>({})
+
   const [showPlanPicker, setShowPlanPicker] = useState(false)
   const [showAddSet, setShowAddSet] = useState(false)
   const [addSetForm, setAddSetForm] = useState({ exercise_name: '', reps: 10, weight_lbs: 0 })
+
+  const enterEdit = () => {
+    setEditName(session.name)
+    setEditDate(String(session.session_date))
+    setEditSets(Object.fromEntries(
+      session.set_logs.map(sl => [sl.id, { exercise_name: sl.exercise_name, reps: sl.reps, weight_lbs: sl.weight_lbs }])
+    ))
+    setEditMode(true)
+  }
+
+  const handleSave = async () => {
+    const promises: Promise<any>[] = []
+    if (editName !== session.name || editDate !== String(session.session_date)) {
+      promises.push(updateSession.mutateAsync({ id: session.id, data: { name: editName, session_date: editDate } }))
+    }
+    for (const [idStr, vals] of Object.entries(editSets)) {
+      const setId = Number(idStr)
+      const orig = session.set_logs.find(s => s.id === setId)
+      if (!orig) continue
+      if (orig.exercise_name !== vals.exercise_name || orig.reps !== vals.reps || orig.weight_lbs !== vals.weight_lbs) {
+        promises.push(updateSet.mutateAsync({ sessionId: session.id, setId, data: vals }))
+      }
+    }
+    await Promise.all(promises)
+    setEditMode(false)
+  }
 
   const handleAddSet = async () => {
     if (!addSetForm.exercise_name.trim()) return
@@ -1026,10 +1061,8 @@ function SessionCard({ session, expanded, onToggle, onDelete, plans, onAttachPla
       sessionId: session.id,
       data: { exercise_name: addSetForm.exercise_name.trim(), set_number: existingCount + 1, reps: addSetForm.reps, weight_lbs: addSetForm.weight_lbs },
     })
-    setAddSetForm({ exercise_name: '', reps: 10, weight_lbs: 0 })
-    setShowAddSet(false)
+    setAddSetForm(f => ({ ...f, exercise_name: '' }))
   }
-
 
   const setCount = session.set_logs.length
   const volume = session.set_logs.reduce((a, l) => a + (l.reps ?? 0) * (l.weight_lbs ?? 0), 0)
@@ -1038,30 +1071,37 @@ function SessionCard({ session, expanded, onToggle, onDelete, plans, onAttachPla
     acc[log.exercise_name].push(log)
     return acc
   }, {})
-
   const linkedPlan = plans.find(p => p.id === session.plan_id)
+
+  const inputCls = 'bg-slate-700 border border-slate-600 text-slate-100 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:border-indigo-500 w-full'
 
   return (
     <Card>
-      <div className="flex items-start justify-between cursor-pointer" onClick={onToggle}>
-        <div>
-          <p className="font-semibold text-slate-100">{session.name}</p>
-          <p className="text-xs text-slate-400 mt-0.5">{format(parseISO(session.session_date), 'EEEE, MMM d, yyyy')}</p>
-          <div className="flex gap-3 mt-2 text-xs text-slate-400">
+      <div className="flex items-start justify-between cursor-pointer" onClick={!editMode ? onToggle : undefined}>
+        <div className="flex-1 min-w-0">
+          <p className="font-semibold text-slate-100 truncate">{session.name}</p>
+          <p className="text-xs text-slate-400 mt-0.5">{format(parseISO(String(session.session_date)), 'EEEE, MMM d, yyyy')}</p>
+          <div className="flex gap-3 mt-2 text-xs text-slate-400 flex-wrap">
             {session.duration_mins && <span>{session.duration_mins} min</span>}
             <span>{setCount} set{setCount !== 1 ? 's' : ''}</span>
             {volume > 0 && <span>{volume.toLocaleString()} lbs vol</span>}
             {linkedPlan && <span className="text-indigo-400">· {linkedPlan.name}</span>}
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <button onClick={(e) => { e.stopPropagation(); onDelete() }} className="text-slate-500 hover:text-red-400 p-1">
+        <div className="flex items-center gap-1 ml-2 shrink-0">
+          {!editMode && expanded && (
+            <button onClick={e => { e.stopPropagation(); enterEdit() }} className="text-slate-500 hover:text-indigo-400 p-1" title="Edit session">
+              <Pencil size={14} />
+            </button>
+          )}
+          <button onClick={e => { e.stopPropagation(); onDelete() }} className="text-slate-500 hover:text-red-400 p-1">
             <Trash2 size={14} />
           </button>
-          <ChevronDown size={16} className={`text-slate-400 ${expanded ? 'rotate-180' : ''} transition-transform`} />
+          <ChevronDown size={16} className={`text-slate-400 ${expanded ? 'rotate-180' : ''} transition-transform`} onClick={!editMode ? onToggle : undefined} />
         </div>
       </div>
-      {expanded && (
+
+      {expanded && !editMode && (
         <div className="mt-4 pt-4 border-t border-slate-700 space-y-4">
           {Object.entries(byExercise).map(([exercise, logs]) => (
             <div key={exercise}>
@@ -1071,9 +1111,7 @@ function SessionCard({ session, expanded, onToggle, onDelete, plans, onAttachPla
                   <div key={log.id} className="flex justify-between text-xs text-slate-400 bg-slate-800/50 px-3 py-1.5 rounded">
                     <span>Set {log.set_number}</span>
                     <span className="text-slate-300">
-                      {log.duration_secs
-                        ? `${log.duration_secs}s`
-                        : `${log.weight_lbs ? `${log.weight_lbs} lbs` : 'BW'} × ${log.reps ?? '—'} reps`}
+                      {log.duration_secs ? `${log.duration_secs}s` : `${log.weight_lbs ? `${log.weight_lbs} lbs` : 'BW'} × ${log.reps ?? '—'} reps`}
                     </span>
                     {log.rpe && <span className="text-yellow-400">RPE {log.rpe}</span>}
                   </div>
@@ -1083,72 +1121,117 @@ function SessionCard({ session, expanded, onToggle, onDelete, plans, onAttachPla
           ))}
           {setCount === 0 && <p className="text-sm text-slate-500">No sets logged.</p>}
 
-          {/* Link Plan footer */}
           <div className="pt-2 border-t border-slate-700/50">
             {showPlanPicker ? (
               <div className="flex items-center gap-2">
                 <select
                   defaultValue={session.plan_id ?? ''}
-                  onChange={e => {
-                    const val = Number(e.target.value)
-                    onAttachPlan(session.id, val)
-                    setShowPlanPicker(false)
-                  }}
-                  className="flex-1 bg-slate-700 border border-slate-600 text-slate-100 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  onChange={e => { onAttachPlan(session.id, Number(e.target.value)); setShowPlanPicker(false) }}
+                  className="flex-1 bg-slate-700 border border-slate-600 text-slate-100 rounded-lg px-3 py-1.5 text-xs focus:outline-none"
                 >
                   <option value={0}>No plan</option>
                   {plans.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                 </select>
-                <button onClick={() => setShowPlanPicker(false)} className="text-slate-500 hover:text-slate-300 text-xs px-2">Cancel</button>
+                <button onClick={() => setShowPlanPicker(false)} className="text-slate-500 text-xs px-2">Cancel</button>
               </div>
             ) : (
-              <button
-                onClick={() => setShowPlanPicker(true)}
-                className="text-xs text-slate-500 hover:text-indigo-400 transition-colors"
-              >
+              <button onClick={() => setShowPlanPicker(true)} className="text-xs text-slate-500 hover:text-indigo-400 transition-colors">
                 {linkedPlan ? `Linked: ${linkedPlan.name} — change` : '+ Link Plan'}
               </button>
             )}
           </div>
+        </div>
+      )}
 
-          {/* Add set to finished session */}
+      {expanded && editMode && (
+        <div className="mt-4 pt-4 border-t border-slate-700 space-y-4">
+          {/* Session meta */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <p className="text-xs text-slate-400 mb-1">Session Name</p>
+              <input value={editName} onChange={e => setEditName(e.target.value)} className={inputCls} />
+            </div>
+            <div>
+              <p className="text-xs text-slate-400 mb-1">Date</p>
+              <input type="date" value={editDate} onChange={e => setEditDate(e.target.value)} className={inputCls} />
+            </div>
+          </div>
+
+          {/* Set rows */}
+          <div className="space-y-2">
+            <div className="grid grid-cols-[1fr_56px_64px_28px] gap-1.5 text-xs text-slate-500 px-1">
+              <span>Exercise</span><span className="text-center">Reps</span><span className="text-center">Wt (lbs)</span><span />
+            </div>
+            {session.set_logs.map(sl => {
+              const vals = editSets[sl.id] ?? { exercise_name: sl.exercise_name, reps: sl.reps, weight_lbs: sl.weight_lbs }
+              const upd = (field: string, v: string | number | null) =>
+                setEditSets(prev => ({ ...prev, [sl.id]: { ...vals, [field]: v } }))
+              return (
+                <div key={sl.id} className="grid grid-cols-[1fr_56px_64px_28px] gap-1.5 items-center">
+                  <input value={vals.exercise_name} onChange={e => upd('exercise_name', e.target.value)} className={inputCls} placeholder="Exercise" />
+                  <input type="number" min="0" value={vals.reps ?? ''} onChange={e => upd('reps', e.target.value ? Number(e.target.value) : null)} className={inputCls + ' text-center'} placeholder="—" />
+                  <input type="number" min="0" step="2.5" value={vals.weight_lbs ?? ''} onChange={e => upd('weight_lbs', e.target.value ? Number(e.target.value) : null)} className={inputCls + ' text-center'} placeholder="—" />
+                  <button
+                    onClick={() => deleteSet.mutateAsync({ sessionId: session.id, setId: sl.id })}
+                    className="text-slate-500 hover:text-red-400 flex items-center justify-center"
+                  ><X size={15} /></button>
+                </div>
+              )
+            })}
+          </div>
+
+          {/* Add more sets inline */}
           {showAddSet ? (
-            <div className="mt-3 bg-slate-800 border border-slate-600 rounded-xl p-3 space-y-2">
-              <p className="text-xs font-semibold text-slate-300">Add Set</p>
+            <div className="bg-slate-900 rounded-lg p-3 space-y-2">
+              <p className="text-xs font-medium text-slate-400">Add Set</p>
               <input
                 autoFocus
                 value={addSetForm.exercise_name}
                 onChange={e => setAddSetForm(f => ({ ...f, exercise_name: e.target.value }))}
                 placeholder="Exercise name"
-                className="w-full bg-slate-700 border border-slate-600 text-slate-100 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-indigo-500"
+                className={inputCls}
               />
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <p className="text-xs text-slate-500 mb-1">Reps</p>
-                  <input type="number" min="1" value={addSetForm.reps} onChange={e => setAddSetForm(f => ({ ...f, reps: Number(e.target.value) }))}
-                    className="w-full bg-slate-700 border border-slate-600 text-slate-100 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-indigo-500" />
+                  <input type="number" min="1" value={addSetForm.reps} onChange={e => setAddSetForm(f => ({ ...f, reps: Number(e.target.value) }))} className={inputCls} />
                 </div>
                 <div>
                   <p className="text-xs text-slate-500 mb-1">Weight (lbs)</p>
-                  <input type="number" min="0" value={addSetForm.weight_lbs} onChange={e => setAddSetForm(f => ({ ...f, weight_lbs: Number(e.target.value) }))}
-                    className="w-full bg-slate-700 border border-slate-600 text-slate-100 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-indigo-500" />
+                  <input type="number" min="0" value={addSetForm.weight_lbs} onChange={e => setAddSetForm(f => ({ ...f, weight_lbs: Number(e.target.value) }))} className={inputCls} />
                 </div>
               </div>
               <div className="flex gap-2">
-                <button onClick={() => setShowAddSet(false)} className="flex-1 py-1.5 rounded-lg bg-slate-700 text-slate-300 text-sm">Cancel</button>
-                <button onClick={handleAddSet} disabled={logSet.isPending} className="flex-1 py-1.5 rounded-lg bg-indigo-600 text-white text-sm font-medium disabled:opacity-50">
-                  {logSet.isPending ? 'Adding…' : 'Add Set'}
+                <button onClick={() => setShowAddSet(false)} className="flex-1 py-1.5 rounded-lg bg-slate-700 text-slate-300 text-xs">Done Adding</button>
+                <button
+                  onClick={handleAddSet}
+                  disabled={logSet.isPending || !addSetForm.exercise_name.trim()}
+                  className="flex-1 py-1.5 rounded-lg bg-indigo-600 text-white text-xs font-medium disabled:opacity-50"
+                >
+                  {logSet.isPending ? 'Adding…' : '+ Add Set'}
                 </button>
               </div>
             </div>
           ) : (
             <button
               onClick={() => setShowAddSet(true)}
-              className="w-full mt-3 flex items-center justify-center gap-2 py-2 rounded-lg border border-dashed border-slate-600 text-slate-400 hover:border-indigo-500 hover:text-indigo-400 transition-colors text-xs font-medium"
+              className="w-full flex items-center justify-center gap-2 py-2 rounded-lg border border-dashed border-slate-600 text-slate-400 hover:border-indigo-500 hover:text-indigo-400 transition-colors text-xs"
             >
-              <Plus size={13} /> Add Set to This Session
+              <Plus size={12} /> Add More Sets
             </button>
           )}
+
+          {/* Save / Cancel */}
+          <div className="flex gap-2 pt-2 border-t border-slate-700/50">
+            <button onClick={() => { setEditMode(false); setShowAddSet(false) }} className="flex-1 py-2 rounded-lg bg-slate-700 text-slate-300 text-sm">Cancel</button>
+            <button
+              onClick={handleSave}
+              disabled={updateSession.isPending || updateSet.isPending}
+              className="flex-1 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium disabled:opacity-50"
+            >
+              {(updateSession.isPending || updateSet.isPending) ? 'Saving…' : 'Save Changes'}
+            </button>
+          </div>
         </div>
       )}
     </Card>

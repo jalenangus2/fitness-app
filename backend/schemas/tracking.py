@@ -34,6 +34,14 @@ class WorkoutSessionCreate(BaseModel):
     set_logs: list[WorkoutSetLogCreate] = []
 
 
+class WorkoutSetLogUpdate(BaseModel):
+    exercise_name: Optional[str] = None
+    set_number: Optional[int] = None
+    reps: Optional[int] = None
+    weight_lbs: Optional[float] = None
+    duration_secs: Optional[int] = None
+
+
 class WorkoutSessionUpdate(BaseModel):
     name: Optional[str] = None
     plan_id: Optional[int] = None

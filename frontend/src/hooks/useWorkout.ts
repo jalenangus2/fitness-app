@@ -98,8 +98,26 @@ export function useFinishSession() {
 export function useUpdateSession() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: ({ id, data }: { id: number; data: { plan_id?: number | null; name?: string } }) =>
+    mutationFn: ({ id, data }: { id: number; data: { plan_id?: number | null; name?: string; session_date?: string; duration_mins?: number } }) =>
       trackingApi.patchSession(id, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['workout-sessions'] }),
+  })
+}
+
+export function useUpdateSet() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ sessionId, setId, data }: { sessionId: number; setId: number; data: { exercise_name?: string; set_number?: number; reps?: number | null; weight_lbs?: number | null; duration_secs?: number | null } }) =>
+      trackingApi.updateSet(sessionId, setId, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['workout-sessions'] }),
+  })
+}
+
+export function useDeleteSet() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ sessionId, setId }: { sessionId: number; setId: number }) =>
+      trackingApi.deleteSet(sessionId, setId),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['workout-sessions'] }),
   })
 }
